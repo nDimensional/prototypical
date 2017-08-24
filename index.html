@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <script src="https://unpkg.com/ipfs/dist/index.min.js"></script>
+</head>
+<style>
+    body header pre {
+        display: inline;
+    }
+
+    body header #lock {
+        float: right;
+        border: none;
+        background: none;
+        cursor: pointer;
+    }
+</style>
+
+<body>
+    <header>
+        <pre id="path"><a id="id"></a>: /<a id="hash" href="#"></a></pre>
+        <button id="lock">🔒</button>
+    </header>
+    <hr />
+    <pre id="editor"></pre>
+
+</body>
+<script>
+    // let saved = true
+    let editable = false
+    const pathElement = document.getElementById("path")
+    const idElement = document.getElementById("id")
+    const hashElement = document.getElementById("hash")
+    const lockElement = document.getElementById("lock")
+    const editorElement = document.getElementById("editor")
+
+    let hash = location.hash || "#"
+    function updateHash(parent) {
+        hash = `#${parent || ""}`
+        history.replaceState({ parent }, parent, hash)
+    }
+
+    updateHash(hash.slice(1))
+
+    const icons = {
+        [true]: "🔓",
+        [false]: "🔒",
+    }
+
+    function toggle() {
+        editable = !editable
+        lockElement.innerText = icons[editable]
+        editorElement.contentEditable = editable
+        editorElement.focus()
+    }
+
+    // window.addEventListener("beforeunload", () => !saved && "oh no")
+
+    const node = new Ipfs()
+    node.on("ready", async () => {
+
+        // Get IPFS node id
+        const { id } = await node.id()
+        idElement.innerText = id
+
+        // Set editiable lock handlers
+        lockElement.addEventListener("click", event => toggle())
+        editorElement.addEventListener("input", ({ target: { innerHTML } }) => {
+            saved = false
+            localStorage.setItem(parent, innerHTML)
+        })
+
+        // Intercept Cmd-S / Ctrl-S events
+        document.addEventListener("keydown", (event) => {
+            const { keyCode, metaKey, ctrlKey, target: { innerHTML } } = event
+            if (keyCode === 83 && (metaKey || ctrlKey)) {
+                event.preventDefault()
+                const commit = prompt("Enter a commit message")
+                if (commit !== null) {
+                    const time = Date.now()
+                    const payload = { commit, innerHTML, time, parent }
+                    const file = new node.types.Buffer(JSON.stringify(payload))
+                    node.files.add(file, (error, result) => {
+                        if (error || !result) {
+                            console.error("IPFS add failed.", error, result)
+                        } else {
+                            // saved = true
+                            const [{ hash }] = result
+                            updateHash(hash)
+                        }
+                    })
+                }
+            }
+        })
+        const parent = hash.slice(1)
+        if (parent) {
+            console.log("catting", parent)
+            node.files.cat(parent, (error, stream) => {
+                if (error || !stream) {
+                    console.error("IPFS cat failed", error)
+                } else {
+                    let result = ""
+                    stream.on("data", chunk => result += chunk.toString())
+                    stream.on("error", error => console.error("IPFS cat failed", error))
+                    stream.on("end", () => {
+                        const { commit, innerHTML, time, parent } = JSON.parse(result)
+                        editorElement.innerHTML = innerHTML
+                    })
+                    hashElement.innerText = parent
+                    hashElement.href = hash
+                }
+            })
+        }
+    })
+
+</script>
+
+</html>
