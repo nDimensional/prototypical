@@ -81,13 +81,14 @@
         })
 
         // Intercept Cmd-S / Ctrl-S events
-        document.addEventListener("keydown", (event) => {
-            const { keyCode, metaKey, ctrlKey, target: { innerHTML } } = event
+        document.addEventListener("keydown", event => {
+            const { keyCode, metaKey, ctrlKey } = event
             if (keyCode === 83 && (metaKey || ctrlKey)) {
                 event.preventDefault()
                 const commit = prompt("Enter a commit message")
                 if (commit !== null) {
                     const time = Date.now()
+                    const { innerHTML } = editorElement
                     const payload = { commit, innerHTML, time, parent }
                     const file = new node.types.Buffer(JSON.stringify(payload))
                     node.files.add(file, (error, result) => {
