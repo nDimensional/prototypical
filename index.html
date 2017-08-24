@@ -3,19 +3,26 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <title>Prototypical</title>
     <script src="https://unpkg.com/ipfs/dist/index.min.js"></script>
 </head>
 <style>
-    body header pre {
-        display: inline;
+    body header {
+        display: inline-flex;
+        width: 100%;
+    }
+
+    body header #path {
+        flex-grow: 1;
+        overflow-x: hidden;
+        margin: 0;
     }
 
     body header #lock {
-        float: right;
         border: none;
         background: none;
         cursor: pointer;
+        padding: 0;
     }
 </style>
 
@@ -89,6 +96,8 @@
                         } else {
                             // saved = true
                             const [{ hash }] = result
+                            hashElement.innerText = hash
+                            hashElement.href = `#${hash}`
                             updateHash(hash)
                         }
                     })
