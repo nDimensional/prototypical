@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <script src="https://unpkg.com/ipfs/dist/index.min.js"></script>
+</head>
+<script>
+    const IPFS = {
+        create() {
+            const node = new Ipfs()
+            return new Promise((resolve, reject) =>
+                node.on("ready", () => resolve(node))
+            )
+        },
+        add(node, text) {
+            const file = new node.types.Buffer(text)
+            return new Promise((resolve, reject) =>
+                node.files.add(file, (error, result) => {
+                    if (error) {
+                        reject(error)
+                    } else {
+                        const [{ hash }] = result
+                        resolve(hash)
+                    }
+                })
+            )
+        },
+        cat(node, hash) {
+            let result = ""
+            return new Promise((resolve, reject) =>
+                node.files.cat(hash, (error, stream) => {
+                    if (error) {
+                        reject(error)
+                    } else {
+                        stream.on("data", chunk => result += chunk.toString())
+                        stream.on("error", error => reject(error))
+                        stream.on("end", () => resolve(result))
+                    }
+                })
+            )
+        }
+    }
+</script>
+</html>

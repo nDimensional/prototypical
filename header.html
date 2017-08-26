@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+</head>
+
+<template id="proto-header-template">
+	<style>
+		header {
+			display: inline-flex;
+			width: 100%;
+		}
+
+		header pre {
+			flex-grow: 1;
+			overflow-x: hidden;
+			margin: 0;
+		}
+
+		header button {
+			border: none;
+			background: none;
+			cursor: pointer;
+			padding: 0;
+			width: 18px;
+		}
+	</style>
+	<header>
+		<pre><span id="node"></span>: /<a id="hash" href="#"></a></pre>
+		<button id="save"></button>
+		<button id="lock">🔒</button>
+	</header>
+</template>
+<script>
+	{
+        const { ownerDocument } = document.currentScript
+		class ProtoHeader extends HTMLElement {
+			constructor() {
+                super()
+
+				const { content } = ownerDocument.getElementById("proto-header-template")
+				const orphan = document.importNode(content, true)
+
+                this.root = this.attachShadow({mode: "open"})
+                this.root.appendChild(orphan)
+
+                this.node = this.root.getElementById("node")
+                this.hash = this.root.getElementById("hash")
+				this.save = this.root.getElementById("save")
+                this.lock = this.root.getElementById("lock")
+				this.save.addEventListener("click", event => this.dispatchEvent(new Event("save")))
+                this.lock.addEventListener("click", event => this.dispatchEvent(new Event("lock")))
+            }
+			static get observedAttributes() {
+				return ["node", "hash", "saved", "locked"]
+			}
+			attributeChangedCallback() {
+                const node = this.getAttribute("node")
+			    const hash = this.getAttribute("hash")
+				const saved = this.getAttribute("saved")
+				const locked = this.getAttribute("locked")
+                this.node.textContent = node
+				this.hash.textContent = hash
+				this.hash.href = `#/${hash}`
+				this.save.textContent = JSON.parse(saved) ? "" : "●"
+                this.lock.textContent = JSON.parse(locked) ? "🔒" : "🔓"
+			}
+			connectedCallback() {
+				this.attributeChangedCallback()
+			}
+		}
+		customElements.define("proto-header", ProtoHeader)
+	}
+
+</script>
+
+</html>
