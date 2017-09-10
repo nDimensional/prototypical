@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+</head>
+<template id="node-template">
+    <style>
+        proto-node {
+            display: block;
+            padding: 4px 0 4px 4px;
+            margin: 8px 0 8px 16px;
+            border: 1px solid lightgrey;
+            border-right: none;
+            border-top-left-radius: 2px;
+            border-bottom-left-radius: 2px;
+        }
+        header {
+            display: inline-flex;
+            width: 100%;
+        }
+        header pre {
+            flex-grow: 1;
+            overflow-x: hidden;
+            padding: 4px;
+            margin: 0;
+        }
+        header button {
+            border: none;
+            background: none;
+            cursor: pointer;
+            padding: 0 4px;
+            color: cornflowerblue;
+            line-height: 1em;
+            font-size: 14px;
+            user-select: none;
+        }
+        header button a {
+            text-decoration: none;
+        }
+        header + hr {
+            margin-top: 2px;
+        }
+        header + hr + main {
+            display: flow-root;
+        }
+    </style>
+    <header>
+        <pre></pre>
+        <button><span>●</span></button>
+        <button><a>🔗</a></button>
+        <button><span>🔒</span></button>
+    </header>
+    <hr />
+    <main></main>
+</template>
+<script>
+    {
+        const { currentScript: { ownerDocument } } = document
+
+        const index = "index.html"
+        const element = "proto-node"
+
+        class ProtoNode extends HTMLElement {
+            constructor() {
+                super()
+                const { content } = ownerDocument.getElementById("node-template")
+
+                this.root = this.attachShadow({mode: "open"})
+                this.root.appendChild(document.importNode(content, true))
+
+                this.header = this.root.querySelector("header")
+                const main = this.root.querySelector("main")
+                const name = this.root.querySelector("header pre")
+                const [save, link, lock] = this.root.querySelectorAll("header button")
+                this.elements = { name, save, link, lock, main }
+                name.textContent = this.name
+                this.locked = true
+                this.saved = true
+            }
+            get locked() {
+                return !!this.isLocked
+            }
+            set locked(locked) {
+                this.isLocked = locked
+                this.elements.main.contentEditable = !locked
+                this.children.forEach(child => child.elements.name.contentEditable = !locked)
+                this.elements.lock.textContent = locked ? "🔒" : "🔓"
+                this.focus()
+            }
+            set saved(saved) {
+                this.elements.save.style.display = saved ? "none" : "initial"
+            }
+            get children() {
+                return Array.from(this.elements.main.querySelectorAll(element))
+            }
+            get name() {
+                return this.getAttribute("name")
+            }
+            set name(name) {
+                this.setAttribute("name", name)
+            }
+            get counter() {
+                if (this.hasAttribute("counter")) {
+                    const counter = this.getAttribute("counter")
+                    return this.counter = 1 + + counter
+                } else {
+                    return this.counter = 1
+                }
+            }
+            set counter(counter) {
+                this.setAttribute("counter", counter)
+            }
+            static get observedAttributes() {
+                return ["name"]
+            }
+            attributeChangedCallback(attribute) {
+                this.elements[attribute].textContent = this[attribute]
+            }
+            generateName() {
+                return `Untitled ${this.counter}`
+            }
+            indent(selection) {
+                const range = selection.getRangeAt(0)
+                const fragment = range.extractContents()
+
+                const uuid = uuidV4()
+                const html = `<proto-node id="${uuid}"></proto-node>`
+                document.execCommand("insertHTML", false, html)
+
+                const node = this.root.getElementById(uuid)
+                node.removeAttribute("id")
+                node.path = this.path + this.name + "/"
+                node.name = this.generateName()
+                node.locked = false
+                node.elements.main.appendChild(fragment)
+                node.focus()
+            }
+            dedent(selection) {
+
+            }
+            parse(html) {
+                this.elements.main.innerHTML = html
+                this.focus()
+            }
+            focus() {
+                this.elements.main.focus()
+                if (!this.isLocked) {
+                    const range = this.ownerDocument.createRange()
+                    range.selectNodeContents(this.elements.main)
+                    range.collapse()
+
+                    const selection = getSelection()
+                    selection.removeAllRanges()
+                    selection.addRange(range)
+                }
+            }
+            load(tree) {
+                if (tree === null || tree === undefined) {
+                    this.parse("")
+                } else if (tree.hasOwnProperty(index)) {
+                    // Render index
+                    this.parse(tree[index])
+                    // Load children, just for good measure
+                    this.children.forEach(node => node.load(tree[node.name]))
+                } else {
+                    // Render directory
+                    Object.keys(tree).forEach(name => {
+                        if (typeof(tree[name]) === "string") {
+                            this.parse(tree[name])
+                        } else {
+                            const child = document.createElement(element)
+                            this.root.appendChild(child)
+                            child.setAttribute("name", name)
+                            child.load(tree[name])
+                        }
+                    })
+                }
+            }
+            save(home) {
+                this.saved = true
+                const root = (home === null ? [this.name] : [home, this.name]).join("/")
+                const path = [root, index].join("/")
+                const text = this.elements.main.innerHTML
+                const files = [{ path, text }]
+                return this.children.reduce((files, child) => files.concat(child.save(root)), files)
+            }
+            connectedCallback() {
+
+                // Name
+                this.elements.name.addEventListener("input", event => {
+                    this.name = event.target.textContent.replace(/\r?\n|\r/g, "")
+                })
+                this.elements.name.addEventListener("keydown", event => {
+                    const { keyCode } = event
+                    if (keyCode === 13) {
+                        // Enter
+                        event.preventDefault()
+                        event.stopPropagation()
+                        event.target.blur()
+                    }
+                })
+
+                // Lock
+                this.elements.lock.addEventListener("click", event => {
+                    this.locked = !this.locked
+                })
+
+                // Main
+                this.elements.main.addEventListener("input", event => {
+                    // TODO ¯\_(ツ)_/¯
+                    this.saved = false
+                })
+                this.elements.main.addEventListener("keydown", event => {
+                    const { keyCode, shiftKey } = event
+                    if (keyCode === 9) {
+                        event.preventDefault()
+                        event.stopPropagation()
+                        const selection = this.root.getSelection()
+                        if (shiftKey) {
+                            // Shift+Tab
+                            this.dedent(selection)
+                        } else {
+                            // Tab
+                            this.indent(selection)
+                        }
+                    }
+                })
+            }
+        }
+
+        customElements.define(element, ProtoNode)
+    }
+</script>
+</html>

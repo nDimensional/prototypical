@@ -4,93 +4,75 @@
 <head>
     <meta charset="UTF-8">
     <title>Prototypical</title>
-    <link href="ipfs.html" rel="import" />
-    <link href="header.html" rel="import" />
-    <link href="editor.html" rel="import" />
+    <link href="node.html" rel="import" />
+    <script src="https://unpkg.com/ipfs/dist/index.min.js"></script>
+    <script src="ipfs.js"></script>
 </head>
+<body>
+    <proto-node></proto-node>
+</body>
 <style>
     html {
         background: #fffff8;
     }
+    proto-node {
+        display: block;
+    }
 </style>
-<body>
-    <proto-header id="header" locked="true" saved="true"></proto-header>
-    <hr />
-    <proto-editor id="editor" locked="true"></proto-editor>
-</body>
 <script>
-    // Constants
-    const saveMessage = "Changes you made may not be saved."
-    const commitMessage = "Enter a commit message"
-
-    // Elements
-    const header = document.getElementById("header")
-    const editor = document.getElementById("editor")
-
-    // State
-    const state = {
-        hash: null,
-        node: null,
-        saved: true,
-        locked: true,
-    }
-
-    const update = {
-        hash(hash) {
-            state.hash = hash
-            history.replaceState({hash}, hash, `#/${hash || ""}`)
-            header.setAttribute("hash", hash || "")
-        },
-        node(node) {
-            state.node = node
-            header.setAttribute("node", node)
-        },
-        saved(saved) {
-            state.saved = saved
-            header.setAttribute("saved", saved)
-        },
-        locked(locked) {
-            state.locked = locked
-            header.setAttribute("locked", locked)
-            editor.setAttribute("locked", locked)
-            editor.focusContent()
-        }
-    }
+    const key = "prototypical"
+    const rootNode = document.querySelector("proto-node")
+    let loading = false
 
     // Save
     async function save(node) {
-        const message = prompt(commitMessage)
-        if (message !== null) {
-            const { content } = editor
-            const parent = state.hash
-            const time = Date.now()
-            const payload = { message, content, parent, time }
-            const hash = await IPFS.add(node, JSON.stringify(payload))
-            update.hash(hash)
-            update.saved(true)
-        }
+        const { name } = rootNode
+        const files = await IPFS.add(node, rootNode.save(null))
+        const { hash } = files.find(({ path }) => path === name)
+        loading = true
+        rootNode.name = hash
+        location.hash = hash
+        localStorage.setItem(key, hash)
     }
 
     // Load
-    async function load(node, hash) {
-        const { content } = JSON.parse(await IPFS.cat(node, hash))
-        editor.content = content
-        editor.focusContent()
-        update.hash(hash)
-        update.saved(true)
+    async function load(node) {
+        const { hash } = location
+        const path = hash.slice(1)
+        if (path.length === 46) {
+            if (loading) {
+                loading = false
+            } else {
+                localStorage.setItem(key, path)
+                const data = await IPFS.collect(node, path)
+                rootNode.name = path
+                rootNode.load(data)
+            }
+        } else {
+            const hash = localStorage.getItem(key)
+            if (hash && hash.length === 46) {
+                loading = true
+                location.hash = hash
+                const data = await IPFS.collect(node, hash)
+                rootNode.name = hash
+                rootNode.load(data)
+            } else {
+                rootNode.name = key
+                rootNode.load(null)
+                rootNode.locked = false
+            }
+        }
     }
 
     // Initialize
     async function initialize() {
+        // IFPS
         const node = await IPFS.create()
-        const { id } = await node.id()
-        update.node(id)
 
         // Events
-        header.addEventListener("lock", event => update.locked(!state.locked))
-        header.addEventListener("save", event => save(node))
-        editor.addEventListener("input", event => state.saved && update.saved(false))
-        window.addEventListener("beforeunload", event => state.saved ? null : saveMessage)
+        // TODO: some shit
+        window.addEventListener("beforeunload", event => null)
+        window.addEventListener("hashchange", event => load(node))
         window.addEventListener("keydown", event => {
             const { keyCode, metaKey, ctrlKey } = event
             // TODO: platform detection
@@ -100,13 +82,7 @@
             }
         })
 
-        // Initialize hash
-        const { hash } = location
-        if (hash.length === 48 && hash.slice(0, 2) === "#/") {
-            load(node, hash.slice(2))
-        } else {
-            update.hash(null)
-        }
+        await load(node)
     }
 
     initialize()
