@@ -7,7 +7,18 @@ function uuidV4() {
 const IPFS = {
     create() {
         return new Promise((resolve, reject) => {
-            const node = new Ipfs()
+            const node = new Ipfs({
+                config: {
+                    Bootstrap: [
+                        "/dns4/ams-1.bootstrap.libp2p.io/tcp/443/wss/ipfs/QmSoLer265NRgSp2LA3dPaeykiS1J6DifTC88f5uVQKNAd",
+                        "/dns4/lon-1.bootstrap.libp2p.io/tcp/443/wss/ipfs/QmSoLMeWqB7YGVLJN3pNLQpmmEk35v6wYtsMGLzSr5QBU3",
+                        "/dns4/sfo-3.bootstrap.libp2p.io/tcp/443/wss/ipfs/QmSoLPppuBtQSGwKDZT2M73ULpjvfd3aZ6ha4oFGL1KrGM",
+                        "/dns4/sgp-1.bootstrap.libp2p.io/tcp/443/wss/ipfs/QmSoLSafTMBsPKadTEgaXctDQVcqN88CNLHXMkTNwMKPnu",
+                        "/dns4/nyc-1.bootstrap.libp2p.io/tcp/443/wss/ipfs/QmSoLueR4xBeUbY9WZ9xGUUxunbKWcrNFTDAadQJmocnWm",
+                        "/dns4/nyc-2.bootstrap.libp2p.io/tcp/443/wss/ipfs/QmSoLV4Bbm51jM9C4gDYZQ9Cy3U6aXMJDAbzgu2fzaDs64"
+                    ]
+                }
+            })
             node.on("error", error => reject(error))
             node.on("ready", () => resolve(node))
         })
@@ -23,6 +34,19 @@ const IPFS = {
                 }
             })
         )
+    },
+    put(node, tree) {
+        const options = { format: "dag-cbor", hashAlg: "sha2-256" }
+        // const options = {}
+        node.dag.put(tree, options, (error, cid) => {
+            console.log("cid", cid.toBaseEncodedString())
+        })
+    },
+    get(node, hash) {
+        const options = {}
+        node.dag.get(hash, options, (error, result) => {
+            console.log(result)
+        })
     },
     cat(node, hash) {
         let result = ""
