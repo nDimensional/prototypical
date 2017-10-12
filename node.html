@@ -57,7 +57,6 @@
     {
         const { currentScript: { ownerDocument } } = document
 
-        const index = "index.html"
         const element = "proto-node"
 
         class ProtoNode extends HTMLElement {
@@ -76,6 +75,12 @@
                 name.textContent = this.name
                 this.locked = true
                 this.saved = true
+            }
+            setHash(hash) {
+                this.elements.link.children[0].href = `#${hash}`
+            }
+            getChild(name) {
+                return this.children.find(child => child.name === name)
             }
             get locked() {
                 return !!this.isLocked

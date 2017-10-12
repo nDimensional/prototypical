@@ -21,6 +21,7 @@
     }
 </style>
 <script>
+    const index = "index.html"
     const key = "prototypical"
     const rootNode = document.querySelector("proto-node")
     let loading = false
@@ -29,11 +30,19 @@
     async function save(node) {
         const { name } = rootNode
         const files = await IPFS.add(node, rootNode.save(null))
+        console.log(files)
+        files
+            .filter(({ path }) => path.split("/").pop() !== index)
+            .forEach(({ path, hash }) =>
+                path.split("/")
+                    .slice(1)
+                    .reduce((parent, name) => parent.getChild(name), rootNode)
+                    .setHash(hash))
         const { hash } = files.find(({ path }) => path === name)
         loading = true
         rootNode.name = hash
         location.hash = hash
-        localStorage.setItem(key, hash)
+//        localStorage.setItem(key, hash)
     }
 
     // Load
@@ -44,24 +53,24 @@
             if (loading) {
                 loading = false
             } else {
-                localStorage.setItem(key, path)
+//                localStorage.setItem(key, path)
                 const data = await IPFS.collect(node, path)
                 rootNode.name = path
                 rootNode.load(data)
             }
         } else {
-            const hash = localStorage.getItem(key)
-            if (hash && hash.length === 46) {
-                loading = true
-                location.hash = hash
-                const data = await IPFS.collect(node, hash)
-                rootNode.name = hash
-                rootNode.load(data)
-            } else {
+//            const hash = localStorage.getItem(key)
+//            if (hash && hash.length === 46) {
+//                loading = true
+//                location.hash = hash
+//                const data = await IPFS.collect(node, hash)
+//                rootNode.name = hash
+//                rootNode.load(data)
+//            } else {
                 rootNode.name = key
                 rootNode.load(null)
                 rootNode.locked = false
-            }
+//            }
         }
     }
 
