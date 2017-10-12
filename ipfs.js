@@ -16,7 +16,14 @@ const IPFS = {
                         "/dns4/sgp-1.bootstrap.libp2p.io/tcp/443/wss/ipfs/QmSoLSafTMBsPKadTEgaXctDQVcqN88CNLHXMkTNwMKPnu",
                         "/dns4/nyc-1.bootstrap.libp2p.io/tcp/443/wss/ipfs/QmSoLueR4xBeUbY9WZ9xGUUxunbKWcrNFTDAadQJmocnWm",
                         "/dns4/nyc-2.bootstrap.libp2p.io/tcp/443/wss/ipfs/QmSoLV4Bbm51jM9C4gDYZQ9Cy3U6aXMJDAbzgu2fzaDs64"
-                    ]
+                    ],
+                    Addresses: {
+                        Swarm: [
+                            "/dns4/star-signal.cloud.ipfs.team/wss/p2p-webrtc-star"
+                        ],
+                        API: '',
+                        Gateway: ''
+                    },
                 }
             })
             node.on("error", error => reject(error))
