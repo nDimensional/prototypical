@@ -8,6 +8,9 @@ export const win = windowsPlatforms.includes(platform)
 const iosPlatforms = ['iPhone', 'iPad', 'iPod']
 export const ios = iosPlatforms.includes(platform)
 
+export const key = "prototypical"
+export const tag = "proto-node"
+
 export function getPath() {
     return window.location.hash.slice(1)
 }
