@@ -1,7 +1,7 @@
 import React from "react"
 
 export default function renderMark(props) {
-    const {mark: {type, data}, children, text} = props
+    const {mark: {type}, children, text} = props
     switch (type) {
         case "a":
             return <a href={text}>{children}</a>
@@ -13,10 +13,5 @@ export default function renderMark(props) {
             return <u>{children}</u>
         case "code":
             return <code>{children}</code>
-        case "img":
-            return <figure>
-                <figcaption>{children}</figcaption>
-                <img src={data.get("src")} />
-            </figure>
     }
 }

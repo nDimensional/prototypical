@@ -1,11 +1,5 @@
-import md from "markdown-it"
 import {Data} from "slate"
-
-const mdInline = md({
-    linkify: true,
-})
-
-mdInline.disable("image")
+import parse from "./parse.js"
 
 function decorateInline(index, key, children, decorations) {
     const tags = []
@@ -66,24 +60,6 @@ function decorateInline(index, key, children, decorations) {
                 marks: [{type: tag}]
             })
             index += length
-        // } else if (type === "image") {
-        //     index += 2
-        //     if (child.children && child.children.length) {
-        //         decorateInline(index, key, child.children, decorations)
-        //     }
-        //     index += content.length
-        //     const length = 5 + attrs.reduce((prev, attr) => prev + attr[1].length, 0)
-        //     const attributes = {}
-        //     if (attrs && attrs.length) {
-        //         attrs.forEach(([key, value]) => attributes[key] = value)
-        //     }
-        //     decorations.push({
-        //         anchorKey: key,
-        //         anchorOffset: index,
-        //         focusKey: key,
-        //         focusOffset: index + length,
-        //         marks: [{type: tag, data: Data.create(attributes)}]
-        //     })
         } else {
             console.log("wow", type, child)
         }
@@ -93,11 +69,11 @@ function decorateInline(index, key, children, decorations) {
 export default function decorateNode(node) {
     const {kind, type} = node
     const decorations = []
-    if (kind === "block" && type === "line") {
+    if (kind === "block") {
         const texts = node.getTexts().toArray()
         const env = {}
         texts.forEach(({key, text}) => {
-            const tokens = mdInline.parseInline(text, env)
+            const tokens = parse(text, env)
             if (tokens && tokens.length === 1) {
                 const [{children}] =  tokens
                 decorateInline(0, key, children, decorations)

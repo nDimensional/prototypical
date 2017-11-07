@@ -1,13 +1,9 @@
 import React from "react"
 import {render} from "react-dom"
 import {Editor} from "slate-react"
-import Plain from "slate-plain-serializer"
 import serializer from "./serialize.jsx"
-import md from "markdown-it"
 
 import {create, getPath, mac, key} from "./utils"
-
-const markdown = md("commonmark")
 
 import decorateNode from "./decorateNode.js"
 import renderNode from "./renderNode.jsx"
@@ -24,7 +20,7 @@ class App extends React.Component {
             const {keyCode, ctrlKey, metaKey} = event
             if (keyCode === 83 && (mac ? metaKey : ctrlKey)) {
                 event.preventDefault()
-                const value = Plain.serialize(this.state.value)
+                const value = serializer.serialize(this.state.value)
                 console.log("saving", value)
                 localStorage.setItem(key, value)
             }
@@ -42,6 +38,7 @@ class App extends React.Component {
     render() {
         const {path, node, value, schema} = this.state
         return <Editor
+            ref={editor => window.editor = this.editor = editor}
             schema={schema}
             value={value}
             placeholder={"What's on your mind?"}
@@ -53,7 +50,9 @@ class App extends React.Component {
     }
     onChange(change) {
         const {kind, value} = change
-        console.log(value.toJS())
+        // console.log(change)
+
+        // console.log("value.decorations", value)
         // const text = serializer.serialize(value)
         // const tokens = markdown.parse(text)
         // console.log(value)
