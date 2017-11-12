@@ -1,105 +1,33 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
-    <title>Prototypical</title>
-    <link href="node.html" rel="import" />
-    <script src="https://unpkg.com/ipfs/dist/index.min.js"></script>
-    <script src="ipfs.js"></script>
+    <title>prototypical</title>
 </head>
-<body>
-    <proto-node></proto-node>
-</body>
 <style>
     html {
-        background: #fffff8;
+        font-family: 'Roboto Mono', monospace;
+        background-color: #fffff8;
+        padding: 8px 4px;
     }
-    proto-node {
-        display: block;
+    img {
+        padding: 0.2em 1.2em;
+    }
+
+    figure {
+        margin-right: 0;
+    }
+
+    @font-face {
+        font-family: 'Roboto Mono';
+        font-style: normal;
+        font-weight: 400;
+        src: local('Roboto Mono'), url(assets/roboto-mono.woff2) format('woff2');
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2212, U+2215;
     }
 </style>
-<script>
-    const index = "index.html"
-    const key = "prototypical"
-    const rootNode = document.querySelector("proto-node")
-    let loading = false
-
-    // Save
-    async function save(node) {
-        const { name } = rootNode
-        const tree = rootNode.save(null)
-        const files = await IPFS.add(node, tree)
-        setHashes(files)
-        const { hash } = files.find(({ path }) => path === name)
-        loading = true
-        rootNode.name = hash
-        location.hash = hash
-    }
-
-    function setHashes(files) {
-        files
-            .map(({ path, hash }) => ({ path: path.split("/").slice(1), hash }))
-            .filter(({ path }) => path[path.length - 1] !== index)
-            .forEach(({ path, hash }) =>
-                path.reduce((root, name) =>
-                    root.getChild(name), rootNode).setHash(hash))
-    }
-
-    // Load
-    async function load(node) {
-        const { hash } = location
-        const path = hash.slice(1)
-        if (path.length === 46) {
-            if (loading) {
-                loading = false
-            } else {
-                const files = await IPFS.collect(node, path)
-                const map = {}
-                files.forEach(({path, text}) => {
-                    if (path !== undefined) {
-                        const [root, ...route] = path.split("/")
-                        const name = route.pop()
-                        if (name !== undefined) {
-                            const directory = route.reduce((parent, child) => parent[child], map)
-                            directory[name] = text === undefined ? {} : text
-                        }
-                    }
-                })
-                rootNode.name = path
-                rootNode.load(map)
-                setHashes(files)
-            }
-        } else {
-            rootNode.name = key
-            rootNode.load(null)
-            rootNode.locked = false
-        }
-    }
-
-    // Initialize
-    async function initialize() {
-        // IFPS
-        const node = await IPFS.create()
-        window.node = node
-        // Events
-        // TODO: some shit
-        window.addEventListener("beforeunload", event => null)
-        window.addEventListener("hashchange", event => load(node))
-        window.addEventListener("keydown", event => {
-            const { keyCode, metaKey, ctrlKey } = event
-            // TODO: platform detection
-            if (keyCode === 83 && (metaKey || ctrlKey)) {
-                event.preventDefault()
-                save(node)
-            }
-        })
-
-        await load(node)
-    }
-
-    initialize()
-
-</script>
-
+<body>
+<main></main>
+</body>
+<script src="build/bundle.js"></script>
 </html>
