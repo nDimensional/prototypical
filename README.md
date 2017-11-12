@@ -1,2 +1,2 @@
 # prototypical
-IFPS Notepad
+IPFS Notepad
