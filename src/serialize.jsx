@@ -4,6 +4,12 @@ import Html from 'slate-html-serializer'
 import {tag, key, index, headerTag, contentTag} from "./utils.js"
 import {blockTypes, text, headings, emptyContent, createHeader} from "./schema.js"
 
+const head = `<meta charset=\"UTF-8\"><title>${key}</title>`
+const style = ""
+function template(body) {
+    return `<!DOCTYPE html><html lang="en"><head>${head}</head><style>${style}</style><body>${body}</body></html>`
+}
+
 const rules = [{
     deserialize(element, next) {
         const type = element.tagName.toLowerCase()
@@ -56,19 +62,19 @@ const rules = [{
 
 export const html = new Html({rules})
 
-function hydrate(block, route, files) {
+function rehydrate(block, route, files) {
     const {nodes: [header, {nodes}], data: {name}} = block.toJS()
     const value = Value.create({document: {nodes}})
     dehydrate(value, [...route, name], files)
 }
 
 function dehydrate(value, route, files) {
-    const text = html.serialize(value)
+    const text = template(html.serialize(value))
     const path = `${route.join("/")}/${index}`
     files.push({path, text})
     value.document.nodes
         .filter(({kind, type}) => kind === "block" && type === tag)
-        .forEach(block => hydrate(block, route, files))
+        .forEach(block => rehydrate(block, route, files))
 }
 
 export function serialize(value) {
