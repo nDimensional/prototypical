@@ -66,7 +66,7 @@ class App extends React.Component {
             value={value}
             node={node}
             readOnly={readOnly}
-            placeholder={"What's on your mind?"}
+            placeholder={"hello"}
             onChange={props => this.onChange(props)}
             validateNode={node => validateNode(node, this.editor)}
             decorateNode={decorateNode}

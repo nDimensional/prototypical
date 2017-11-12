@@ -39,13 +39,38 @@ export function createText(content) {
     }
 }
 
+export function createNode(data, nodes) {
+    return {
+        kind: "block",
+        data,
+        type: tag,
+        isVoid: false,
+        nodes: [
+            createHeader(data),
+            createContent(nodes)
+        ]
+    }
+}
+
 export function createHeader({name, path}) {
     return {
         kind: "block",
         type: headerTag,
+        isVoid: false,
         nodes: [createText(`@[${name}](${path})`)]
     }
 }
+
+export function createContent(nodes) {
+    return {
+        kind: "block",
+        type: contentTag,
+        data: {},
+        isVoid: false,
+        nodes
+    }
+}
+
 export const emptyBlock = {
     kind: "block",
     type: defaultType,
@@ -74,6 +99,7 @@ export default {
                 {kinds: ["block"], types: [contentTag], min: 1, max: 1},
             ],
             normalize(change, reason, context) {
+                console.log("normalizing tag", reason, context)
                 if (reason === "child_kind_invalid") {
                     const {node, rule, child, index} = context
                     if (child.kind === "text" && index === 0) {
@@ -94,6 +120,7 @@ export default {
                 ...blockSchema,
             },
             normalize(change, reason, context) {
+                console.log("normalizing header", reason, context)
                 if (reason === "parent_type_invalid") {
                     const {node, parent, rule} = context
                     if (node.nodes.size === 1 && node.nodes.get(0).kind === "text") {
@@ -111,6 +138,7 @@ export default {
                 ...documentSchema,
             },
             normalize(change, reason, context) {
+                console.log("normalizing content", reason, context)
                 if (reason === "parent_type_invalid") {
                     const {node, parent, rule} = context
                     // Actually we should just delete this, so don't do anything

@@ -1,5 +1,5 @@
 import * as R from "ramda"
-import {defaultType, text} from "./schema.js"
+import {defaultType, text, createNode} from "./schema.js"
 import {collect, tag, headerTag, contentTag} from "./utils"
 import {deserialize} from "./serialize.jsx"
 
@@ -41,18 +41,14 @@ function validateBlock(block, editor) {
             updates.data = data
         }
         if (!block.data || data.path !== block.data.get("path")) {
-            console.log("FIRING MISSILES")
-            const {nodes: [nodeHeader, nodeContent]} = block
             collect(editor.props.node, path).then(root => {
                 const {document: {nodes}} = deserialize(root)
                 editor.change(change => {
-                    console.log("CHANGING", change, node)
-                    change.setNodeByKey(block.key, {data: {path, name, loaded: true}})
-                    change.replaceNodeByKey(nodeContent.nodes.get(0).key, nodes.get(0))
-                    nodes.slice(1).forEach((node, index) => change.insertNodeByKey(nodeContent.key, index + 1, node))
+                    change.replaceNodeByKey(block.key, createNode(data, nodes))
                 })
             })
         }
+        return
     }
 
     // Return collective change
