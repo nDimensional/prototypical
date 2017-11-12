@@ -8,8 +8,11 @@ export const win = windowsPlatforms.includes(platform)
 const iosPlatforms = ['iPhone', 'iPad', 'iPod']
 export const ios = iosPlatforms.includes(platform)
 
+export const index = "index.html"
 export const key = "prototypical"
 export const tag = "proto-node"
+export const headerTag = "proto-header"
+export const contentTag = "proto-content"
 
 export function getPath() {
     return window.location.hash.slice(1)
@@ -24,43 +27,17 @@ export function create() {
     })
 }
 
-export function get(node, hash) {
-    const options = {}
-    return new Promise((resolve, reject) => {
-        node.dag.get(hash, options, (error, {value}) => {
-            if (error) {
-                reject(error)
-            } else {
-                resolve(value)
-            }
-        })
-    })
-}
-
-export function put(node, object) {
-    const options = { format: "dag-cbor", hashAlg: "sha2-256" }
-    return new Promise((resolve, reject) => {
-        node.dag.put(object, options, (error, cid) => {
-            if (error) {
-                reject(error)
-            } else {
-                resolve(cid.toBaseEncodedString())
-            }
-        })
-    })
-}
-
-export function tree(node, hash) {
-    const options = {}
-    return new PRomise((resolve, reject) => {
-        node.dag.tree(hash, options, (error, result) => {
+export async function add(node, files) {
+    const buffers = files.map(({ path, text }) => ({ path, content: new node.types.Buffer(text)}))
+    return new Promise((resolve, reject) =>
+        node.files.add(buffers, (error, result) => {
             if (error) {
                 reject(error)
             } else {
                 resolve(result)
             }
         })
-    })
+    )
 }
 
 export async function collect(node, hash) {
@@ -89,9 +66,11 @@ export async function collect(node, hash) {
 
     files.forEach(({path, text}) => {
         const [hash, ...route] = path.split("/")
-        const name = route.pop()
-        const directory = route.reduce((parent, child) => parent[child], map)
-        directory[name] = text === undefined ? {} : text
+        if (route.length > 0) {
+            const name = route.pop()
+            const directory = route.reduce((parent, child) => parent[child], map)
+            directory[name] = text === undefined ? {} : text
+        }
     })
     return map
 }

@@ -1,60 +1,121 @@
-export const blockTypes = ["p", "h1", "h2", "h3", "img", "blockquote", "node"]
+import {Block} from "slate"
+import * as R from "ramda"
+import {tag, headerTag, contentTag} from "./utils.js"
+
+export const defaultType = "p"
+export const headingTypes = ["h1", "h2", "h3", "blockquote"]
+export const blockTypes = [defaultType, ...headingTypes, "img", tag]
 export const markTypes = ["strong", "em", "u", "code", "a"]
-// const elementName = "proto-node"
 
 export const text = {
-    node: /^@\[([^\[]*)]\(([^)]+)\)/,
-    img: /^!\[([^\[]*)]\(([^)]+)\)/,
+    [tag]: /^@\[([^\[]*)]\(([^)]+)\)$/,
+    img: /^!\[([^\[]*)]\(([^)]+)\)$/,
     h1: /^#($|[^#])/,
     h2: /^##($|[^#])/,
     h3: /^###($|[^#])/,
-    blockquote: /^>($|[^>])/
+    blockquote: /^>($|[^>])/,
 }
-
-export const data = {
-    image({src, alt}) {
-        console.log("validating", src, alt)
-    }
-}
-
-const split = type => `(${text[type].source.slice(1)})`
-const negatives = Object.keys(text).map(split).join("|")
-text.p = new RegExp(`^(?!(${negatives}))`)
 
 export const headings = {
-    blockquote: ">",
     h1: "#",
     h2: "##",
     h3: "###",
+    blockquote: ">",
 }
 
-function normalize(change, reason, context) {
-    if (reason === "node_text_invalid") {
-        const {node} = context
-        const type = blockTypes.find(type => text[type].test(node.text))
-        const block = {kind: "block", type}
-        if (type === "image") {
-        } else if (type === "node") {
-        } else {
-            // ok
-        }
-        change.setNodeByKey(node.key, block)
+const documentSchema = {nodes: [{types: blockTypes, min: 1}]}
+const blockSchema = {nodes: [{kinds: ["text"]}]}
+
+export function createText(content) {
+    return {
+        kind: "text",
+        leaves: [
+            {
+                kind: "leaf",
+                text: content || "",
+                marks: []
+            }
+        ]
     }
 }
 
-const validators = {text, data}
-const blocks = {}
-const nodes = [{kinds: ["text"]}]
-blockTypes.forEach(type => {
-    blocks[type] = {nodes, normalize}
-    Object.keys(validators).forEach(key => {
-        if (validators[key].hasOwnProperty(type)) {
-            blocks[type][key] = validators[key][type]
-        }
-    })
-})
+export function createHeader({name, path}) {
+    return {
+        kind: "block",
+        type: headerTag,
+        nodes: [createText(`@[${name}](${path})`)]
+    }
+}
+export const emptyBlock = {
+    kind: "block",
+    type: defaultType,
+    data: {},
+    isVoid: false,
+    nodes: [createText("")]
+}
+
+export const emptyContent = {
+    kind: "block",
+    type: contentTag,
+    data: {},
+    isVoid: false,
+    nodes: [emptyBlock],
+}
 
 export default {
-    document: {nodes: [{kinds: ["block"], types: blockTypes}]},
-    blocks
+    document: documentSchema,
+    blocks: {
+        [defaultType]: blockSchema,
+        ...R.mapObjIndexed(() => blockSchema, headings),
+        img: blockSchema,
+        [tag]: {
+            nodes: [
+                {kinds: ["block"], types: [headerTag], min: 1, max: 1},
+                {kinds: ["block"], types: [contentTag], min: 1, max: 1},
+            ],
+            normalize(change, reason, context) {
+                if (reason === "child_kind_invalid") {
+                    const {node, rule, child, index} = context
+                    if (child.kind === "text" && index === 0) {
+                        change.wrapBlockByKey(child.key, headerTag)
+                    }
+                } else if (reason === "child_required") {
+                    const {node, rule, index} = context
+                    if (index === 1) {
+                        change.insertNodeByKey(node.key, index, Block.create(emptyContent))
+                    }
+                }
+            }
+        },
+        [headerTag]: {
+            parent: {
+                kinds: ["block"],
+                types: [tag],
+                ...blockSchema,
+            },
+            normalize(change, reason, context) {
+                if (reason === "parent_type_invalid") {
+                    const {node, parent, rule} = context
+                    if (node.nodes.size === 1 && node.nodes.get(0).kind === "text") {
+                        change.insertNodeByKey(parent.key, 0, node.nodes.get(0))
+                    } else {
+                        console.log("panic! At the disco.")
+                    }
+                }
+            }
+        },
+        [contentTag]: {
+            parent: {
+                kinds: ["block"],
+                types: [tag],
+                ...documentSchema,
+            },
+            normalize(change, reason, context) {
+                if (reason === "parent_type_invalid") {
+                    const {node, parent, rule} = context
+                    // Actually we should just delete this, so don't do anything
+                }
+            }
+        },
+    },
 }

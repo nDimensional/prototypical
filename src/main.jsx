@@ -1,86 +1,83 @@
 import React from "react"
+import "babel-polyfill"
 import {render} from "react-dom"
 import {Editor} from "slate-react"
-import serializer from "./serialize.jsx"
+import {html, serialize, deserialize} from "./serialize.jsx"
 
-import {create, getPath, mac, key} from "./utils"
+import {create, add, collect, getPath, mac, key} from "./utils"
 
+import validateNode from "./validateNode.js"
 import decorateNode from "./decorateNode.js"
 import renderNode from "./renderNode.jsx"
 import renderMark from "./renderMark.jsx"
-import state from "./state.jsx"
+import schema from "./schema.js"
+
+const placeholder = "<p>LOADING...</p>"
 
 class App extends React.Component {
     constructor(props) {
         super(props)
-        this.state = state
+        const path = getPath()
+        const readOnly = path !== ""
+        const value = html.deserialize(readOnly ? placeholder : "<p></p>")
+        this.state = {readOnly, path, value, root: null}
     }
-    componentWillMount() {
-        window.addEventListener("keydown", event => {
+    componentDidMount() {
+        const {readOnly, path} = this.state
+        create().then(node => {
+            window.node = node
+            console.log("ipfs ready")
+            this.setState({node})
+            if (readOnly) {
+                collect(node, path).then(root => {
+                    const value = deserialize(root)
+                    const state = {root, value, readOnly: false}
+                    this.setState(state)
+                })
+            }
+
+
+        })
+
+        window.addEventListener("keydown", async (event) => {
             const {keyCode, ctrlKey, metaKey} = event
             if (keyCode === 83 && (mac ? metaKey : ctrlKey)) {
                 event.preventDefault()
-                const value = serializer.serialize(this.state.value)
-                console.log("saving", value)
-                localStorage.setItem(key, value)
+                const files = serialize(this.state.value)
+                add(this.state.node, files).then(files => {
+                    const {hash} = files.find(({path}) => path === key)
+                    location.hash = hash
+                })
             }
         })
+
+        window.addEventListener("hashchange", event => {
+            console.log("hash changed")
+            this.setState({
+                path: getPath()
+            })
+        })
     }
-    // componentDidMount() {
-    //     // create().then(node => this.setState({node}))
-    //     // window.addEventListener("hashchange", event => {
-    //     //     this.setState({
-    //     //         path: getPath()
-    //     //     })
-    //     // })
-    //     window.s = () => this.state.state.toJSON()
-    // }
     render() {
-        const {path, node, value, schema} = this.state
+        const {node, value, readOnly} = this.state
         return <Editor
             ref={editor => window.editor = this.editor = editor}
             schema={schema}
             value={value}
+            node={node}
+            readOnly={readOnly}
             placeholder={"What's on your mind?"}
             onChange={props => this.onChange(props)}
+            validateNode={node => validateNode(node, this.editor)}
             decorateNode={decorateNode}
             renderNode={renderNode}
             renderMark={renderMark}
         />
     }
     onChange(change) {
-        const {kind, value} = change
-        // console.log(change)
-
-        // console.log("value.decorations", value)
-        // const text = serializer.serialize(value)
-        // const tokens = markdown.parse(text)
-        // console.log(value)
-        // console.log(text)
-        // if (text !== this.state.text) {
-        //     const html = markdown.render(text, {})
-        //     // TODO: roundtrip value -> plaintext -> markdown -> html -> value
-        //     // ~~ woah ~~
-        //     // this.setState({value})
-        //     this.setState({value: serializer.deserialize(html), text})
-        // }
+        const {value} = change
         this.setState({value})
     }
-    // renderHeader() {
-    //     const {path} = this.props
-    //     if (path) {
-    //         const array = path.split("/")
-    //         return array.map((name, index) => {
-    //             const href = `#${array.slice(0, index + 1).join("/")}`
-    //             return [
-    //                 index > 0 && "/",
-    //                 <a key={index} href={href}>{name}</a>
-    //             ]
-    //         })
-    //     } else {
-    //         return "prototypical"
-    //     }
-    // }
 }
 
 const container = document.querySelector("main")
