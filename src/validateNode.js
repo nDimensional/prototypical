@@ -15,9 +15,11 @@ function getText(block) {
 }
 
 function validateBlock(block, editor) {
+    // TODO: be smarter
     if (block.type === headerTag || block.type === contentTag) {
         return
     }
+
     const updates = {}
 
     // Type
@@ -47,8 +49,8 @@ function validateBlock(block, editor) {
                     change.replaceNodeByKey(block.key, createNode(data, nodes))
                 })
             })
+            return
         }
-        return
     }
 
     // Return collective change

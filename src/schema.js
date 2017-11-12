@@ -99,7 +99,6 @@ export default {
                 {kinds: ["block"], types: [contentTag], min: 1, max: 1},
             ],
             normalize(change, reason, context) {
-                console.log("normalizing tag", reason, context)
                 if (reason === "child_kind_invalid") {
                     const {node, rule, child, index} = context
                     if (child.kind === "text" && index === 0) {
@@ -120,7 +119,6 @@ export default {
                 ...blockSchema,
             },
             normalize(change, reason, context) {
-                console.log("normalizing header", reason, context)
                 if (reason === "parent_type_invalid") {
                     const {node, parent, rule} = context
                     if (node.nodes.size === 1 && node.nodes.get(0).kind === "text") {
@@ -138,7 +136,6 @@ export default {
                 ...documentSchema,
             },
             normalize(change, reason, context) {
-                console.log("normalizing content", reason, context)
                 if (reason === "parent_type_invalid") {
                     const {node, parent, rule} = context
                     // Actually we should just delete this, so don't do anything
