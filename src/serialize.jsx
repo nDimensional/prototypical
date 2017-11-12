@@ -21,7 +21,6 @@ const rules = [{
                 block.data = {src, alt}
                 block.nodes = next([document.createTextNode(`![${alt}](${src})`)])
             } else if (type === tag) {
-                console.log(element)
                 const name = element.getAttribute("name")
                 const path = element.getAttribute("path")
                 block.data = {name, path}
@@ -32,7 +31,6 @@ const rules = [{
     },
     serialize(object, children) {
         const {kind, type, data} = object
-        console.log(kind, type)
         if (kind === "block") {
             if (headings.hasOwnProperty(type)) {
                 const [[first, ...rest], ...last] = children.toJS()
@@ -57,7 +55,6 @@ const rules = [{
 }]
 
 export const html = new Html({rules})
-window.html = html
 
 function hydrate(block, route, files) {
     const {nodes: [header, {nodes}], data: {name}} = block.toJS()
@@ -66,7 +63,6 @@ function hydrate(block, route, files) {
 }
 
 function dehydrate(value, route, files) {
-    console.log("value", value, route)
     const text = html.serialize(value)
     const path = `${route.join("/")}/${index}`
     files.push({path, text})
@@ -77,9 +73,7 @@ function dehydrate(value, route, files) {
 
 export function serialize(value) {
     const files = []
-    console.log(value)
     dehydrate(value, [key], files)
-    console.log("files", files)
     return files
 }
 
