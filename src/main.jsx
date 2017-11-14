@@ -4,7 +4,7 @@ import {render} from "react-dom"
 import {Editor} from "slate-react"
 import {html, serialize, deserialize} from "./serialize.jsx"
 
-import {create, add, collect, getPath, mac, key} from "./utils"
+import {create, add, collect, getPath, mac, key} from "./utils.js"
 
 import validateNode from "./validateNode.js"
 import decorateNode from "./decorateNode.js"
@@ -20,23 +20,12 @@ class App extends React.Component {
         const path = getPath()
         const readOnly = path !== ""
         const value = html.deserialize(readOnly ? placeholder : "<p></p>")
-        this.state = {readOnly, path, value, root: null}
+        this.state = {readOnly, path, value, root: null, reload: true}
     }
     componentDidMount() {
-        const {readOnly, path} = this.state
         create().then(node => {
-            window.node = node
-            console.log("ipfs ready")
-            this.setState({node})
-            if (readOnly) {
-                collect(node, path).then(root => {
-                    const value = deserialize(root)
-                    const state = {root, value, readOnly: false}
-                    this.setState(state)
-                })
-            }
-
-
+            console.log("ipfs initialized")
+            this.setState({node}, () => this.load())
         })
 
         window.addEventListener("keydown", async (event) => {
@@ -46,17 +35,33 @@ class App extends React.Component {
                 const files = serialize(this.state.value)
                 add(this.state.node, files).then(files => {
                     const {hash} = files.find(({path}) => path === key)
-                    location.hash = hash
+                    this.setState({reload: false}, () => location.hash = hash)
+                    // location.hash = hash
                 })
             }
         })
 
         window.addEventListener("hashchange", event => {
-            console.log("hash changed")
-            this.setState({
-                path: getPath()
-            })
+            const {reload} = this.state
+            if (reload) {
+                console.log("hash updated externally")
+                const path = getPath()
+                this.setState({path, readOnly: true}, () => this.load())
+            } else {
+                console.log("hash changed internally")
+                this.setState({reload: true})
+            }
         })
+    }
+    load() {
+        const {path, node, saved, readOnly} = this.state
+        if (readOnly) {
+            console.log("collecting")
+            collect(node, path).then(root => {
+                const value = deserialize(root)
+                this.setState({root, value, readOnly: false})
+            })
+        }
     }
     render() {
         const {node, value, readOnly} = this.state
