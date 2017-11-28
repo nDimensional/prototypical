@@ -7,9 +7,10 @@ export const headingTypes = ["h1", "h2", "h3", "blockquote"]
 export const blockTypes = [defaultType, ...headingTypes, "img", tag]
 export const markTypes = ["strong", "em", "u", "code", "a"]
 
+export const pathTest = /[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{46}/
 export const text = {
-    [tag]: /^@\[([^\[]*)]\(([^)]+)\)$/,
-    img: /^!\[([^\[]*)]\(([^)]+)\)$/,
+    [tag]: /^@\[([^\[]*)]\(([^)]*)\)$/,
+    img: /^!\[([^\[]*)]\(([^)]*)\)$/,
     h1: /^#($|[^#])/,
     h2: /^##($|[^#])/,
     h3: /^###($|[^#])/,
@@ -71,12 +72,22 @@ export function createContent(nodes) {
     }
 }
 
+export const emptyText = createText("")
+
 export const emptyBlock = {
     kind: "block",
     type: defaultType,
     data: {},
     isVoid: false,
-    nodes: [createText("")]
+    nodes: [emptyText]
+}
+
+export const emptyHeader = {
+    kind: "block",
+    type: headerTag,
+    data: {},
+    isVoid: false,
+    nodes: [emptyText]
 }
 
 export const emptyContent = {

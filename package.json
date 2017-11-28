@@ -5,15 +5,14 @@
     "babel-polyfill": "^6.26.0",
     "highlight.js": "^9.12.0",
     "immutable": "^3.8.2",
-    "ipfs": "^0.26.0",
     "markdown-it": "^8.4.0",
     "prismjs": "^1.8.4",
     "ramda": "^0.25.0",
-    "react": "^16.1.0",
-    "react-dom": "^16.1.0",
-    "slate": "^0.30.6",
-    "slate-html-serializer": "^0.4.6",
-    "slate-react": "^0.10.11"
+    "react": "^16.1.1",
+    "react-dom": "^16.1.1",
+    "slate": "^0.31.3",
+    "slate-html-serializer": "^0.4.11",
+    "slate-react": "^0.10.17"
   },
   "devDependencies": {
     "babel-core": "^6.26.0",

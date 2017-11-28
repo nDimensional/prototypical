@@ -1,6 +1,6 @@
 import * as R from "ramda"
-import {defaultType, text, createNode} from "./schema.js"
-import {collect, tag, headerTag, contentTag} from "./utils"
+import {defaultType, text, createNode, pathTest} from "./schema.js"
+import {load, tag, headerTag, contentTag} from "./utils"
 import {deserialize} from "./serialize.jsx"
 
 
@@ -14,7 +14,15 @@ function getText(block) {
     return block.text
 }
 
-function validateBlock(block, editor) {
+function loadNode(editor, {name, path}, key) {
+    load(editor.props.node, path).then(root => {
+        const {document: {nodes}} = deserialize(root)
+        const node = createNode({name, path, loading: false}, nodes)
+        editor.change(change => change.replaceNodeByKey(key, node))
+    })
+}
+
+function validateBlock(block, editor, root) {
     // TODO: be smarter
     if (block.type === headerTag || block.type === contentTag) {
         return
@@ -36,20 +44,21 @@ function validateBlock(block, editor) {
         if (!block.data || !R.equals(data, block.data.toJS())) {
             updates.data = data
         }
-    } else if (type === tag && ![headerTag, contentTag].includes(block.type)) {
+    } else if (type === tag) {
         const [match, name, path] = text[tag].exec(blockText)
-        const data = {name, path}
-        if (!block.data || !R.equals(data, block.data.toJS())) {
-            updates.data = data
-        }
-        if (!block.data || data.path !== block.data.get("path")) {
-            collect(editor.props.node, path).then(root => {
-                const {document: {nodes}} = deserialize(root)
-                editor.change(change => {
-                    change.replaceNodeByKey(block.key, createNode(data, nodes))
-                })
-            })
-            return
+        if (block.data) {
+            const data = block.data.toJS()
+            if (data.path !== path) {
+                if (!data.loading) {
+                    updates.data = {name, path, loading: true}
+                    loadNode(editor, {name, path}, block.key)
+                }
+            } else if (data.name !== name) {
+                updates.data = {name, path, loading: false}
+            }
+        } else {
+            updates.data = {name, path, loading: true}
+            loadNode(editor, {name, path}, block.key)
         }
     }
 
@@ -59,8 +68,8 @@ function validateBlock(block, editor) {
     }
 }
 
-export default function validateNode(node, editor) {
+export default function validateNode(node, editor, root) {
     if (node.kind === "block") {
-        return validateBlock(node, editor)
+        return validateBlock(node, editor, root)
     }
 }

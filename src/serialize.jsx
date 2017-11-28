@@ -2,9 +2,9 @@ import React from 'react'
 import {Value} from "slate"
 import Html from 'slate-html-serializer'
 import {tag, key, index, headerTag, contentTag} from "./utils.js"
-import {blockTypes, text, headings, emptyContent, createHeader} from "./schema.js"
+import {blockTypes, text, headings, emptyContent, emptyHeader, createText} from "./schema.js"
 
-const head = `<meta charset=\"UTF-8\"><title>${key}</title>`
+const head = `<meta charset="UTF-8"><title>${key}</title>`
 const style = ""
 function template(body) {
     return `<!DOCTYPE html><html lang="en"><head>${head}</head><style>${style}</style><body>${body}</body></html>`
@@ -28,9 +28,8 @@ const rules = [{
                 block.nodes = next([document.createTextNode(`![${alt}](${src})`)])
             } else if (type === tag) {
                 const name = element.getAttribute("name")
-                const path = element.getAttribute("path")
-                block.data = {name, path}
-                block.nodes = [createHeader({name, path}), emptyContent]
+                block.data = {name, empty: true}
+                block.nodes = [emptyHeader, emptyContent]
             }
             return block
         }
@@ -50,7 +49,8 @@ const rules = [{
             } else if (type === "img") {
                 return <img {...data.toJS()} />
             } else if (type === tag) {
-                return React.createElement(tag, data.toJS(), [])
+                const {name} = data.toJS()
+                return React.createElement(tag, {name}, [])
             } else if (type === headerTag || type === contentTag) {
                 return []
             } else if (type === contentTag) {
@@ -83,13 +83,20 @@ export function serialize(value) {
     return files
 }
 
-export function deserialize(root) {
-    const value = html.deserialize(root[index]).toJS()
-    Object.keys(root).filter(key => key !== index).forEach(key => {
+export function deserialize(root, path) {
+    const route = path || []
+    const text = root.links[index]
+    const value = html.deserialize(text).toJS()
+    Object.keys(root.links).filter(key => key !== index).forEach(key => {
         const node = value.document.nodes.find(({kind, type, data: {name}}) => type === tag && name === key)
         if (node) {
-            const {document: {nodes}} = deserialize(root[key])
-            node.nodes[1].nodes = nodes
+            const {nodes: [header, content], data: {name}} = node
+            const {document: {nodes}} = deserialize(root.links[key], route.concat([name]))
+            node.data = {name, path: root.links[key].hash}
+            header.nodes = [createText(`@[${name}](${root.links[key].hash})`)]
+            content.nodes = nodes
+        } else {
+            console.error("cooler! By the lake.")
         }
     })
 
