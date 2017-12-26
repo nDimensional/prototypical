@@ -1,8 +1,6 @@
-import * as R from "ramda"
-import {defaultType, text, createNode, pathTest} from "./schema.js"
+import {defaultType, text, createNode} from "./schema.js"
 import {load, tag, headerTag, contentTag} from "./utils"
 import {deserialize} from "./serialize.jsx"
-
 
 function getText(block) {
     const {type} = block
@@ -23,7 +21,14 @@ function loadNode(editor, {name, path}, key) {
 }
 
 function validateBlock(block, editor, root) {
-    // TODO: be smarter
+
+    if (block.type === "please-wrap-me") {
+        // okay
+        // const data = {name: "Test Name", path: "foobar"}
+        // const {nodes, key} = block.toJS()
+        // return change => change.replaceNodeByKey(block.key, createNode(data, nodes))
+    }
+
     if (block.type === headerTag || block.type === contentTag) {
         return
     }
@@ -40,9 +45,8 @@ function validateBlock(block, editor, root) {
     // Data
     if (type === "img") {
         const [match, alt, src] = text.img.exec(blockText)
-        const data = {alt, src}
-        if (!block.data || !R.equals(data, block.data.toJS())) {
-            updates.data = data
+        if (!block.data || alt !== block.data.alt || src !== block.data.src) {
+            updates.data = {alt, src}
         }
     } else if (type === tag) {
         const [match, name, path] = text[tag].exec(blockText)

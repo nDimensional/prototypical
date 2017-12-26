@@ -2,7 +2,9 @@ import React, {Component} from "react"
 import "babel-polyfill"
 import {render} from "react-dom"
 import {Editor} from "slate-react"
+
 import {html, serialize, deserialize} from "./serialize.jsx"
+import {autoClose, indent} from "./plugins.js"
 
 import {create, save, load, getPath, mac, key, tag, index} from "./utils.js"
 
@@ -13,6 +15,8 @@ import renderMark from "./renderMark.jsx"
 import schema, {createHeader} from "./schema.js"
 
 const placeholder = "<p>LOADING...</p>"
+
+const plugins = [autoClose(["[]", "()"]), indent()]
 
 class App extends Component {
     constructor(props) {
@@ -79,7 +83,9 @@ class App extends Component {
     render() {
         const {node, value, readOnly} = this.state
         return <Editor
-            ref={editor => window.editor = this.editor = editor}
+            plugins={plugins}
+            autoFocus={true}
+            ref={editor => this.editor = window.editor = editor}
             schema={schema}
             value={value}
             node={node}

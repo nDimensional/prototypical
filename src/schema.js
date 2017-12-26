@@ -1,5 +1,4 @@
 import {Block} from "slate"
-import * as R from "ramda"
 import {tag, headerTag, contentTag} from "./utils.js"
 
 export const defaultType = "p"
@@ -98,11 +97,14 @@ export const emptyContent = {
     nodes: [emptyBlock],
 }
 
+const headingSchema = {}
+headingTypes.forEach(headingType => headingSchema[headingType] = blockSchema)
+
 export default {
     document: documentSchema,
     blocks: {
         [defaultType]: blockSchema,
-        ...R.mapObjIndexed(() => blockSchema, headings),
+        ...headingSchema,
         img: blockSchema,
         [tag]: {
             nodes: [

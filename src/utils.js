@@ -1,7 +1,4 @@
-// import IPFS from "ipfs"
-// import IPFS from "../../js-ipfs/dist/index.js"
-
-const IPFS = window.Ipfs
+import IPFS from "ipfs"
 
 const { platform } = navigator
 const macosPlatforms = ['Macintosh', 'MacIntel', 'MacPPC', 'Mac68K']
@@ -21,6 +18,10 @@ export function getPath() {
     return window.location.hash.slice(1)
 }
 
+export function getQuery() {
+    return window.location.search.slice(1)
+}
+
 export function create() {
     const options = {
         EXPERIMENTAL: {
@@ -28,6 +29,16 @@ export function create() {
             sharding: true,
             dht: true,
             relay: true,
+        },
+        config: {
+            "Addresses": {
+                "API": "",
+                "Gateway": "",
+                "Swarm": [
+                    "/ip4/0.0.0.0/tcp/0",
+                    '/dns4/wrtc-star.discovery.libp2p.io/tcp/443/wss/p2p-webrtc-star'
+                ]
+            }
         }
     }
     return new Promise((resolve, reject) => {
