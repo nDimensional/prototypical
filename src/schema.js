@@ -8,8 +8,8 @@ export const markTypes = ["strong", "em", "u", "code", "a"]
 
 export const pathTest = /[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{46}/
 export const text = {
-    [tag]: /^@\[([^\[]*)]\(([^)]*)\)$/,
-    img: /^!\[([^\[]*)]\(([^)]*)\)$/,
+    [tag]: /^@\[([^\[]*)]\(([^)]+)\)$/,
+    img: /^!\[([^\[]*)]\(([^)]+)\)$/,
     h1: /^#($|[^#])/,
     h2: /^##($|[^#])/,
     h3: /^###($|[^#])/,
