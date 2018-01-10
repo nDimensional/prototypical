@@ -45,7 +45,6 @@ function validateBlock(block, editor, root) {
     // Data
     if (type === "img") {
         const [match, alt, src] = text.img.exec(blockText)
-        console.log("got match", block.data, alt, src)
         if (!block.data || alt !== block.data.get("alt") || src !== block.data.get("src")) {
             updates.data = {alt, src}
         }
