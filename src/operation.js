@@ -1,28 +1,67 @@
-import { Y } from "./y"
+import { Y, set, insert, createArray, createMap, createText, isText } from "./y"
 import { Text, Operation } from "slate"
+import { resolve } from "path"
 // Shim the default appliers with ones that also keep `pool` updated
 
 // Utils
-export function walk(node, pool) {
+export function walk(node, y) {
 	const { object } = node
 	if (object === "text") {
-		pool.set(node.key, new Y.Text(node.text))
+		const text = createText(y, node.text)
+		text.key = node.key
+		return text
 	} else {
 		const { data, nodes } = node
-		const y = new Y.Map()
-		y.set("object", object)
-		y.set("data", data.toJS())
+		const children = Array.from(nodes).map(node => walk(node, y))
+		const properties = {
+			object,
+			data: data.toJS(),
+			nodes: createArray(y, children),
+		}
 		if (object === "block" || object === "inline") {
 			const { isVoid, type } = node
-			y.set("isVoid", isVoid)
-			y.set("type", type)
+			properties.isVoid = isVoid
+			properties.type = type
 		}
-		const children = new Y.Array()
-		const keys = Array.from(nodes.map(node => node.key))
-		children.insert(0, keys)
-		y.set("nodes", children)
-		nodes.forEach(node => walk(node, pool))
-		pool.set(node.key, y)
+		const map = createMap(y, properties)
+		map.key = node.key
+		return map
+	}
+}
+
+window.walk = walk
+
+function resolvePath(y, path) {
+	return path.reduce(
+		(root, index) => root.get("nodes").get(index),
+		y.share.value.get("document")
+	)
+}
+
+function clone(node, y) {
+	if (isText(node)) {
+		const text = createText(y, node.toString())
+		text.key = node.key
+		return text
+	} else {
+		const object = node.get("object")
+		const data = node.get("object")
+		const children = node
+			.get("nodes")
+			.toArray()
+			.map(node => clone(node, y))
+		const properties = {
+			object,
+			data,
+			nodes: createArray(y, children),
+		}
+		if (object === "block" || object === "inline") {
+			properties.isVoid = node.get("isVoid")
+			properties.type = node.get("type")
+		}
+		const map = createMap(y, properties)
+		map.key = node.key
+		return map
 	}
 }
 
@@ -54,7 +93,7 @@ const APPLIERS = {
 	 * @return {Value}
 	 */
 
-	insert_node(value, operation, pool, remote) {
+	insert_node(value, operation, y) {
 		const { path, node } = operation
 		const index = path[path.length - 1]
 		const rest = path.slice(0, -1)
@@ -65,11 +104,9 @@ const APPLIERS = {
 		document = document.updateNode(parent)
 		value = value.set("document", document)
 
-		walk(node, pool)
-		pool
-			.get(parent.key)
-			.get("nodes")
-			.insert(index, node.key)
+		const yNode = walk(node, y)
+		const yParent = resolvePath(y, rest)
+		insert(yParent.get("nodes"), index, [yNode])
 
 		return value
 	},
@@ -82,7 +119,7 @@ const APPLIERS = {
 	 * @return {Value}
 	 */
 
-	insert_text(value, operation, pool, remote) {
+	insert_text(value, operation, y) {
 		const { path, offset, text, marks } = operation
 		let { document, selection } = value
 		const { anchorKey, focusKey, anchorOffset, focusOffset } = selection
@@ -92,18 +129,15 @@ const APPLIERS = {
 		node = node.insertText(offset, text, marks)
 		document = document.updateNode(node)
 
-		pool.get(node.key).insert(offset, text)
+		const yNode = resolvePath(y, path)
+		yNode.insert(offset, text)
 
 		// Update the selection
-		if (remote) {
-			// TODO: handle remote selection logic
-		} else {
-			if (anchorKey == node.key && anchorOffset >= offset) {
-				selection = selection.moveAnchor(text.length)
-			}
-			if (focusKey == node.key && focusOffset >= offset) {
-				selection = selection.moveFocus(text.length)
-			}
+		if (anchorKey == node.key && anchorOffset >= offset) {
+			selection = selection.moveAnchor(text.length)
+		}
+		if (focusKey == node.key && focusOffset >= offset) {
+			selection = selection.moveFocus(text.length)
 		}
 
 		value = value.set("document", document).set("selection", selection)
@@ -118,7 +152,7 @@ const APPLIERS = {
 	 * @return {Value}
 	 */
 
-	merge_node(value, operation) {
+	merge_node(value, operation, y) {
 		const { path } = operation
 		const withPath = path
 			.slice(0, path.length - 1)
@@ -133,22 +167,25 @@ const APPLIERS = {
 		// Perform the merge in the document.
 		parent = parent.mergeNode(oneIndex, twoIndex)
 		document = document.updateNode(parent)
+		const yParent = resolvePath(y, path.slice(0, -1))
+		const yOne = resolvePath(y, withPath)
+		const yTwo = resolvePath(y, path)
 		if (Text.isText(one) && Text.isText(two)) {
-			const oneChars = pool.get(one.key)
-			const twoChars = pool.get(two.key)
-			oneChars.push(twoChars.toArray())
+			yOne.insert(yOne.length, yTwo.toString())
 		} else {
-			const oneNodes = pool.get(one.key).get("nodes")
-			const twoNodes = pool.get(two.key).get("nodes")
-			oneNodes.push(twoNodes.toArray())
+			const oneNodes = yOne.get("nodes")
+			const twoNodes = yTwo.get("nodes")
+			insert(
+				oneNodes,
+				oneNodes.length,
+				twoNodes.toArray().map(node => clone(node, y))
+			)
 		}
-		pool.delete(two.key)
+		yParent.get("nodes").delete(twoIndex)
 
 		// If the nodes are text nodes and the selection is inside the second node
 		// update it to refer to the first node instead.
-		if (remote) {
-			// TODO: handle remote selection logic
-		} else if (one.object == "text") {
+		if (one.object == "text") {
 			const { anchorKey, anchorOffset, focusKey, focusOffset } = selection
 			let normalize = false
 
@@ -186,7 +223,7 @@ const APPLIERS = {
 	 * @return {Value}
 	 */
 
-	move_node(value, operation, pool, remote) {
+	move_node(value, operation, y) {
 		const { path, newPath } = operation
 		const newIndex = newPath[newPath.length - 1]
 		const newParentPath = newPath.slice(0, -1)
@@ -200,13 +237,14 @@ const APPLIERS = {
 		parent = parent.removeNode(oldIndex)
 		document = document.updateNode(parent)
 
-		pool
-			.get(parent.key)
-			.get("nodes")
-			.delete(oldIndex)
+		const yParent = resolvePath(y, oldParentPath)
+		const yNode = resolvePath(y, path)
+		const yClone = clone(yNode, y)
+		yParent.get("nodes").delete(oldIndex)
 
 		// Find the new target...
 		let target
+		let yTarget
 
 		// If the old path and the rest of the new path are the same, then the new
 		// target is the old parent.
@@ -215,6 +253,7 @@ const APPLIERS = {
 			oldParentPath.length === newParentPath.length
 		) {
 			target = parent
+			yTarget = yParent
 		} else if (
 			oldParentPath.every((x, i) => x === newParentPath[i]) &&
 			oldIndex < newParentPath[oldParentPath.length]
@@ -223,9 +262,11 @@ const APPLIERS = {
 			// correct, we need to decrement the new path at the old path's last index.
 			newParentPath[oldParentPath.length]--
 			target = document.assertPath(newParentPath)
+			yTarget = resolvePath(y, newParentPath)
 		} else {
 			// Otherwise, we can just grab the target normally...
 			target = document.assertPath(newParentPath)
+			yTarget = resolvePath(y, newParentPath)
 		}
 
 		// Insert the new node to its new parent.
@@ -233,10 +274,7 @@ const APPLIERS = {
 		document = document.updateNode(target)
 		value = value.set("document", document)
 
-		pool
-			.get(target.key)
-			.get("nodes")
-			.insert(newIndex, node.key)
+		insert(yTarget.get("nodes"), newIndex, [yClone])
 
 		return value
 	},
@@ -249,7 +287,7 @@ const APPLIERS = {
 	 * @return {Value}
 	 */
 
-	remove_mark(value, operation, pool, remote) {
+	remove_mark(value, operation) {
 		const { path, offset, length, mark } = operation
 		let { document } = value
 		let node = document.assertPath(path)
@@ -267,16 +305,14 @@ const APPLIERS = {
 	 * @return {Value}
 	 */
 
-	remove_node(value, operation, pool, remote) {
+	remove_node(value, operation, y) {
 		const { path } = operation
 		let { document, selection } = value
 		const { startKey, endKey } = selection
 		const node = document.assertPath(path)
 
 		// If the selection is set, check to see if it needs to be updated.
-		if (remote) {
-			// TODO: handle remote selection logic
-		} else if (selection.isSet) {
+		if (selection.isSet) {
 			const hasStartNode = node.hasNode(startKey)
 			const hasEndNode = node.hasNode(endKey)
 			const first = node.object == "text" ? node : node.getFirstText() || node
@@ -318,11 +354,8 @@ const APPLIERS = {
 		parent = parent.removeNode(index)
 		document = document.updateNode(parent)
 
-		pool.delete(node.key)
-		pool
-			.get(parent.key)
-			.get("nodes")
-			.delete(index)
+		const yParent = resolvePath(y, path.slice(0, -1))
+		yParent.get("nodes").delete(index)
 
 		// Update the document and selection.
 		value = value.set("document", document).set("selection", selection)
@@ -337,7 +370,7 @@ const APPLIERS = {
 	 * @return {Value}
 	 */
 
-	remove_text(value, operation, pool, remote) {
+	remove_text(value, operation, y) {
 		const { path, offset, text } = operation
 		const { length } = text
 		const rangeOffset = offset + length
@@ -345,23 +378,19 @@ const APPLIERS = {
 		const { anchorKey, focusKey, anchorOffset, focusOffset } = selection
 		let node = document.assertPath(path)
 
-		if (remote) {
-			// TODO: handle remote selection logic
-		} else {
-			if (anchorKey == node.key) {
-				if (anchorOffset >= rangeOffset) {
-					selection = selection.moveAnchor(-length)
-				} else if (anchorOffset > offset) {
-					selection = selection.moveAnchorTo(anchorKey, offset)
-				}
+		if (anchorKey == node.key) {
+			if (anchorOffset >= rangeOffset) {
+				selection = selection.moveAnchor(-length)
+			} else if (anchorOffset > offset) {
+				selection = selection.moveAnchorTo(anchorKey, offset)
 			}
+		}
 
-			if (focusKey == node.key) {
-				if (focusOffset >= rangeOffset) {
-					selection = selection.moveFocus(-length)
-				} else if (focusOffset > offset) {
-					selection = selection.moveFocusTo(focusKey, offset)
-				}
+		if (focusKey == node.key) {
+			if (focusOffset >= rangeOffset) {
+				selection = selection.moveFocus(-length)
+			} else if (focusOffset > offset) {
+				selection = selection.moveFocusTo(focusKey, offset)
 			}
 		}
 
@@ -369,7 +398,8 @@ const APPLIERS = {
 		document = document.updateNode(node)
 		value = value.set("document", document).set("selection", selection)
 
-		pool.get(node.key).delete(offset, length)
+		const yNode = resolvePath(y, path)
+		yNode.delete(offset, text.length)
 
 		return value
 	},
@@ -462,7 +492,7 @@ const APPLIERS = {
 	 * @return {Value}
 	 */
 
-	split_node(value, operation, pool, remote) {
+	split_node(value, operation, y) {
 		const { path, position, properties } = operation
 		let { document, selection } = value
 
@@ -480,42 +510,59 @@ const APPLIERS = {
 		}
 		document = document.updateNode(parent)
 
-		walk(splitNode, pool)
-		const parentNodes = pool.get(parent.key).get("nodes")
-		if (node.object === "text") {
-			const text = pool.get(node.key)
-			text.delete(position, text.length - position)
+		const yNode = resolvePath(y, path)
+		const yParent = resolvePath(y, path.slice(0, -1))
+		if (isText(yNode)) {
+			const text = createText(y, yNode.toString().slice(position))
+			yNode.delete(position, yNode.length - position)
+			insert(yParent.get("nodes"), index + 1, [text])
 		} else {
-			const siblings = pool.get(node.key).get("nodes")
-			siblings.delete(position, siblings.length - position)
+			const nodes = yNode.get("nodes")
+			const props = properties || {}
+			props.object = yNode.get("object")
+			props.data = props.data || {}
+			const data = yNode.get("data")
+			if (props.data) {
+				Object.keys(props.data).forEach(key => (data[key] = props.data[key]))
+			}
+			props.data = data
+			if (props.object === "block" || props.object === "inline") {
+				props.type = props.type || yNode.get("type")
+				props.isVoid = props.isVoid || yNode.get("isVoid")
+			}
+			props.nodes = createArray(
+				y,
+				nodes
+					.toArray()
+					.slice(position)
+					.map(node => clone(node, y))
+			)
+			const map = createMap(y, props)
+			nodes.delete(position, nodes.length - position)
+			insert(yParent.get("nodes"), index + 1, [map])
 		}
-		parentNodes.insert(index, splitNode.key)
 
-		if (remote) {
-			// TODO: handle remote selection logic
-		} else {
-			// Determine whether we need to update the selection...
-			const { startKey, endKey, startOffset, endOffset } = selection
-			const next = document.getNextText(node.key)
-			let normalize = false
+		// Determine whether we need to update the selection...
+		const { startKey, endKey, startOffset, endOffset } = selection
+		const next = document.getNextText(node.key)
+		let normalize = false
 
-			// If the start point is after or equal to the split, update it.
-			if (node.key == startKey && position <= startOffset) {
-				selection = selection.moveStartTo(next.key, startOffset - position)
-				normalize = true
-			}
+		// If the start point is after or equal to the split, update it.
+		if (node.key == startKey && position <= startOffset) {
+			selection = selection.moveStartTo(next.key, startOffset - position)
+			normalize = true
+		}
 
-			// If the end point is after or equal to the split, update it.
-			if (node.key == endKey && position <= endOffset) {
-				selection = selection.moveEndTo(next.key, endOffset - position)
-				normalize = true
-			}
+		// If the end point is after or equal to the split, update it.
+		if (node.key == endKey && position <= endOffset) {
+			selection = selection.moveEndTo(next.key, endOffset - position)
+			normalize = true
+		}
 
-			// Normalize the selection if we changed it, since the methods we use might
-			// leave it in a non-normalized value.
-			if (normalize) {
-				selection = selection.normalize(document)
-			}
+		// Normalize the selection if we changed it, since the methods we use might
+		// leave it in a non-normalized value.
+		if (normalize) {
+			selection = selection.normalize(document)
 		}
 
 		// Return the updated value.
@@ -532,7 +579,7 @@ const APPLIERS = {
  * @return {Value} value
  */
 
-function applyOperation(value, operation, pool) {
+function applyOperation(value, operation, y) {
 	operation = Operation.create(operation)
 	const { type } = operation
 	const apply = APPLIERS[type]
@@ -541,7 +588,7 @@ function applyOperation(value, operation, pool) {
 		throw new Error(`Unknown operation type: "${type}".`)
 	}
 
-	return apply(value, operation, pool, false)
+	return apply(value, operation, y)
 }
 
 /**
