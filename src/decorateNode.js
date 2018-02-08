@@ -67,9 +67,9 @@ function decorateInline(index, key, children, decorations) {
 }
 
 export default function decorateNode(node) {
-    const {kind, type} = node
+    const {object, type} = node
     const decorations = []
-    if (kind === "block") {
+    if (object === "block") {
         const texts = node.getTexts().toArray()
         const env = {}
         texts.forEach(({key, text}) => {

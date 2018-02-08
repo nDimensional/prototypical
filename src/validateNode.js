@@ -73,7 +73,7 @@ function validateBlock(block, editor, root) {
 }
 
 export default function validateNode(node, editor, root) {
-    if (node.kind === "block") {
+    if (node.object === "block") {
         return validateBlock(node, editor, root)
     }
 }

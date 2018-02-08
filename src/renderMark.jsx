@@ -4,7 +4,7 @@ export default function renderMark(props) {
     const {mark: {type}, children, text} = props
     switch (type) {
         case "a":
-            return <a href={text}>{children}</a>
+            return <a onClick={e => e.metaKey && window.open(text, "_blank").focus()} href={text}>{children}</a>
         case "strong":
             return <strong>{children}</strong>
         case "em":

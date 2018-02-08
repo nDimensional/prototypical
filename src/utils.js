@@ -1,5 +1,3 @@
-import IPFS from "ipfs"
-
 const { platform } = navigator
 const macosPlatforms = ['Macintosh', 'MacIntel', 'MacPPC', 'Mac68K']
 export const mac = macosPlatforms.includes(platform)
@@ -16,36 +14,6 @@ export const contentTag = "proto-content"
 
 export function getPath() {
     return window.location.hash.slice(1)
-}
-
-export function getQuery() {
-    return window.location.search.slice(1)
-}
-
-export function create() {
-    const options = {
-        EXPERIMENTAL: {
-            pubsub: true,
-            sharding: true,
-            dht: true,
-            relay: true,
-        },
-        config: {
-            "Addresses": {
-                "API": "",
-                "Gateway": "",
-                "Swarm": [
-                    "/ip4/0.0.0.0/tcp/0",
-                    '/dns4/wrtc-star.discovery.libp2p.io/tcp/443/wss/p2p-webrtc-star'
-                ]
-            }
-        }
-    }
-    return new Promise((resolve, reject) => {
-        const node = new IPFS(options)
-        node.on("error", error => reject(error))
-        node.on("ready", () => resolve(node))
-    })
 }
 
 export async function save(node, files) {
