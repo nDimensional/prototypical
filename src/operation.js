@@ -1,7 +1,7 @@
 import { Y, set, insert, createArray, createMap, createText, isText } from "./y"
 import { Text, Operation } from "slate"
 import { resolve } from "path"
-// Shim the default appliers with ones that also keep `pool` updated
+import { Map } from "immutable"
 
 // Utils
 export function walk(node, y) {
@@ -45,7 +45,7 @@ function clone(node, y) {
 		return text
 	} else {
 		const object = node.get("object")
-		const data = node.get("object")
+		const data = node.get("data")
 		const children = node
 			.get("nodes")
 			.toArray()
@@ -65,8 +65,49 @@ function clone(node, y) {
 	}
 }
 
+export function updateSelectionRemove(selection, document, node) {
+	// If the selection is set, check to see if it needs to be updated.
+	const { startKey, endKey } = selection
+	if (selection.isSet) {
+		const hasStartNode = node.hasNode(startKey)
+		const hasEndNode = node.hasNode(endKey)
+		const first = node.object == "text" ? node : node.getFirstText() || node
+		const last = node.object == "text" ? node : node.getLastText() || node
+		const prev = document.getPreviousText(first.key)
+		const next = document.getNextText(last.key)
+
+		// If the start point was in this node, update it to be just before/after.
+		if (hasStartNode) {
+			if (prev) {
+				selection = selection.moveStartTo(prev.key, prev.text.length)
+			} else if (next) {
+				selection = selection.moveStartTo(next.key, 0)
+			} else {
+				selection = selection.deselect()
+			}
+		}
+
+		// If the end point was in this node, update it to be just before/after.
+		if (selection.isSet && hasEndNode) {
+			if (prev) {
+				selection = selection.moveEndTo(prev.key, prev.text.length)
+			} else if (next) {
+				selection = selection.moveEndTo(next.key, 0)
+			} else {
+				selection = selection.deselect()
+			}
+		}
+
+		// If the selection wasn't deselected, normalize it.
+		if (selection.isSet) {
+			selection = selection.normalize(document)
+		}
+	}
+	return selection
+}
+
 // Appliers
-const APPLIERS = {
+const appliers = {
 	/**
 	 * Add mark to text at `offset` and `length` in node by `path`.
 	 *
@@ -167,6 +208,7 @@ const APPLIERS = {
 		// Perform the merge in the document.
 		parent = parent.mergeNode(oneIndex, twoIndex)
 		document = document.updateNode(parent)
+
 		const yParent = resolvePath(y, path.slice(0, -1))
 		const yOne = resolvePath(y, withPath)
 		const yTwo = resolvePath(y, path)
@@ -308,45 +350,9 @@ const APPLIERS = {
 	remove_node(value, operation, y) {
 		const { path } = operation
 		let { document, selection } = value
-		const { startKey, endKey } = selection
 		const node = document.assertPath(path)
 
-		// If the selection is set, check to see if it needs to be updated.
-		if (selection.isSet) {
-			const hasStartNode = node.hasNode(startKey)
-			const hasEndNode = node.hasNode(endKey)
-			const first = node.object == "text" ? node : node.getFirstText() || node
-			const last = node.object == "text" ? node : node.getLastText() || node
-			const prev = document.getPreviousText(first.key)
-			const next = document.getNextText(last.key)
-
-			// If the start point was in this node, update it to be just before/after.
-			if (hasStartNode) {
-				if (prev) {
-					selection = selection.moveStartTo(prev.key, prev.text.length)
-				} else if (next) {
-					selection = selection.moveStartTo(next.key, 0)
-				} else {
-					selection = selection.deselect()
-				}
-			}
-
-			// If the end point was in this node, update it to be just before/after.
-			if (selection.isSet && hasEndNode) {
-				if (prev) {
-					selection = selection.moveEndTo(prev.key, prev.text.length)
-				} else if (next) {
-					selection = selection.moveEndTo(next.key, 0)
-				} else {
-					selection = selection.deselect()
-				}
-			}
-
-			// If the selection wasn't deselected, normalize it.
-			if (selection.isSet) {
-				selection = selection.normalize(document)
-			}
-		}
+		selection = updateSelectionRemove(selection, document, node)
 
 		// Remove the node from the document.
 		let parent = document.getParent(node.key)
@@ -437,7 +443,16 @@ const APPLIERS = {
 		node = node.merge(properties)
 		document = document.updateNode(node)
 		value = value.set("document", document)
-		console.error("I don't know how to set a node")
+
+		const yNode = resolvePath(y, path)
+		const props = properties
+		Object.keys(props).forEach(key => {
+			if (Map.isMap(props[key])) {
+				yNode.set(key, props[key].toJS())
+			} else {
+				yNode.set(key, props[key])
+			}
+		})
 		return value
 	},
 
@@ -582,13 +597,11 @@ const APPLIERS = {
 function applyOperation(value, operation, y) {
 	operation = Operation.create(operation)
 	const { type } = operation
-	const apply = APPLIERS[type]
-
-	if (!apply) {
+	if (appliers.hasOwnProperty(type)) {
+		return appliers[type](value, operation, y)
+	} else {
 		throw new Error(`Unknown operation type: "${type}".`)
 	}
-
-	return apply(value, operation, y)
 }
 
 /**

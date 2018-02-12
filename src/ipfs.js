@@ -2,7 +2,7 @@ import IPFS from "ipfs"
 
 export default function() {
 	const options = {
-		repo: "ipfs/pubsub-demo/" + Math.random(),
+		// repo: "ipfs/pubsub-demo/" + Math.random(),
 		EXPERIMENTAL: {
 			pubsub: true,
 			sharding: true,

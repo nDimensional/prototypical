@@ -7,11 +7,12 @@
     "ipfs": "^0.27.7",
     "ipfs-pubsub-room": "^1.1.5",
     "markdown-it": "^8.4.0",
+    "niceware": "^1.0.4",
     "react": "^16.2.0",
     "react-dom": "^16.2.0",
-    "slate": "^0.32.2",
-    "slate-html-serializer": "^0.5.2",
-    "slate-react": "^0.11.2",
+    "slate": "^0.32.4",
+    "slate-html-serializer": "^0.5.4",
+    "slate-react": "^0.11.4",
     "y-array": "^10.1.4",
     "y-ipfs-connector": "^2.1.2",
     "y-map": "^10.1.3",
@@ -25,7 +26,7 @@
     "babel-preset-es2015": "^6.24.1",
     "babel-preset-react": "^6.24.1",
     "babel-preset-stage-2": "^6.24.1",
-    "webpack": "^3.10.0"
+    "webpack": "^3.11.0"
   },
   "scripts": {
     "build": "node_modules/.bin/webpack --config webpack.config.js",

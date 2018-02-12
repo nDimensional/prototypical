@@ -1,11 +1,13 @@
 // import yJS from "../yjs/yjs/src/Y.js"
 
 const yJS = require("yjs/dist/y.js")
+
 const yArray = require("y-array/dist/y-array")
 const yText = require("y-text/dist/y-text")
 const yMap = require("y-map/dist/y-map")
 const yMemory = require("y-memory/dist/y-memory")
 const yIpfs = require("y-ipfs-connector")
+// const yIpfs = require("../yjs/y-ipfs-connector/src/index")
 
 // import yMemory from "../yjs/y-memory.js"
 // import yIpfs from "../yjs/y-ipfs-connector"
@@ -14,8 +16,8 @@ import { tag } from "./utils"
 
 yJS.extend(yArray, yText, yMap)
 yJS.extend(yMemory, yIpfs)
-export const Y = yJS
-window.Y = yJS
+
+export const Y = (window.Y = yJS)
 
 export default async function(ipfs, room) {
 	const y = await Y({
@@ -31,7 +33,6 @@ export default async function(ipfs, room) {
 			value: "Map",
 		},
 	})
-	// y.define("pool", Y.Map)
 	return (window.y = y)
 }
 

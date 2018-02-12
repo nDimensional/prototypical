@@ -118,3 +118,26 @@ export function deserialize(root, path) {
 
 	return Value.create(value)
 }
+
+export const initial = text => ({
+	object: "value",
+	document: {
+		object: "document",
+		key: "root",
+		data: {},
+		nodes: [
+			{
+				object: "block",
+				type: "p",
+				isVoid: false,
+				data: {},
+				nodes: [
+					{
+						object: "text",
+						leaves: [{ object: "leaf", text, marks: [] }],
+					},
+				],
+			},
+		],
+	},
+})

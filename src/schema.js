@@ -8,7 +8,7 @@ export const markTypes = ["strong", "em", "u", "code", "a"]
 
 export const pathTest = /[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{46}/
 export const text = {
-	[tag]: /^@\[([^\[]*)]\(([^)]+)\)$/,
+	// [tag]: /^@\[([^\[]*)]\(([^)]+)\)$/,
 	img: /^!\[([^\[]*)]\(([^)]+)\)$/,
 	h1: /^#($|[^#])/,
 	h2: /^##($|[^#])/,
@@ -103,54 +103,54 @@ export default {
 		[defaultType]: blockSchema,
 		...headingSchema,
 		img: blockSchema,
-		[tag]: {
-			nodes: [
-				{ objects: ["block"], types: [headerTag], min: 1, max: 1 },
-				{ objects: ["block"], types: [contentTag], min: 1, max: 1 },
-			],
-			normalize(change, reason, context) {
-				if (reason === "child_object_invalid") {
-					const { node, rule, child, index } = context
-					if (child.object === "text" && index === 0) {
-						change.wrapBlockByKey(child.key, headerTag)
-					}
-				} else if (reason === "child_required") {
-					const { node, rule, index } = context
-					if (index === 1) {
-						change.insertNodeByKey(node.key, index, Block.create(emptyContent))
-					}
-				}
-			},
-		},
-		[headerTag]: {
-			parent: {
-				objects: ["block"],
-				types: [tag],
-				...blockSchema,
-			},
-			normalize(change, reason, context) {
-				if (reason === "parent_type_invalid") {
-					const { node, parent, rule } = context
-					if (node.nodes.size === 1 && node.nodes.get(0).object === "text") {
-						change.insertNodeByKey(parent.key, 0, node.nodes.get(0))
-					} else {
-						console.log("panic! At the disco.")
-					}
-				}
-			},
-		},
-		[contentTag]: {
-			parent: {
-				objects: ["block"],
-				types: [tag],
-				...documentSchema,
-			},
-			normalize(change, reason, context) {
-				if (reason === "parent_type_invalid") {
-					const { node, parent, rule } = context
-					// Actually we should just delete this, so don't do anything
-				}
-			},
-		},
+		// 	[tag]: {
+		// 		nodes: [
+		// 			{ objects: ["block"], types: [headerTag], min: 1, max: 1 },
+		// 			{ objects: ["block"], types: [contentTag], min: 1, max: 1 },
+		// 		],
+		// 		normalize(change, reason, context) {
+		// 			if (reason === "child_object_invalid") {
+		// 				const { node, rule, child, index } = context
+		// 				if (child.object === "text" && index === 0) {
+		// 					change.wrapBlockByKey(child.key, headerTag)
+		// 				}
+		// 			} else if (reason === "child_required") {
+		// 				const { node, rule, index } = context
+		// 				if (index === 1) {
+		// 					change.insertNodeByKey(node.key, index, Block.create(emptyContent))
+		// 				}
+		// 			}
+		// 		},
+		// 	},
+		// 	[headerTag]: {
+		// 		parent: {
+		// 			objects: ["block"],
+		// 			types: [tag],
+		// 			...blockSchema,
+		// 		},
+		// 		normalize(change, reason, context) {
+		// 			if (reason === "parent_type_invalid") {
+		// 				const { node, parent, rule } = context
+		// 				if (node.nodes.size === 1 && node.nodes.get(0).object === "text") {
+		// 					change.insertNodeByKey(parent.key, 0, node.nodes.get(0))
+		// 				} else {
+		// 					console.log("panic! At the disco.")
+		// 				}
+		// 			}
+		// 		},
+		// 	},
+		// 	[contentTag]: {
+		// 		parent: {
+		// 			objects: ["block"],
+		// 			types: [tag],
+		// 			...documentSchema,
+		// 		},
+		// 		normalize(change, reason, context) {
+		// 			if (reason === "parent_type_invalid") {
+		// 				const { node, parent, rule } = context
+		// 				// Actually we should just delete this, so don't do anything
+		// 			}
+		// 		},
+		// 	},
 	},
 }

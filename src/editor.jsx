@@ -1,12 +1,14 @@
-import React, { Component } from "react"
 import "babel-polyfill"
-import { Editor, findDOMRange, findRange } from "slate-react"
-import { Text, Character, Value, Data, Block, Inline, Document } from "slate"
-import { html, serialize, deserialize } from "./serialize.jsx"
-import schema from "./schema.js"
-import { is } from "immutable"
+import React, { Component } from "react"
+import { Editor } from "slate-react"
+import { Value, Range } from "slate"
+import niceware from "niceware"
+
+import { initial, serialize, deserialize } from "./serialize.jsx"
+import schema, { createHeader } from "./schema.js"
 
 import applyOperation, { walk } from "./operation"
+import applyObservation, { spawn } from "./observation"
 
 import validateNode from "./validateNode"
 import renderMark from "./renderMark.jsx"
@@ -14,135 +16,254 @@ import renderNode from "./renderNode.jsx"
 import decorateNode from "./decorateNode"
 
 import { autoClose, indent } from "./plugins"
+import { getPath, mac, save, load, key, index } from "./utils"
 
-import { Y, set, isText, isArray, isMap } from "./y"
-
-const constructorMap = {
-	block: Block,
-	inline: Inline,
-	document: Document,
-	text: Text,
-}
+import createYjs, { set } from "./y"
+import createIpfs from "./ipfs"
 
 const plugins = [autoClose(["[]", "()"]), indent()]
 
-const values = {
-	loading: "<P>LOADING...</P>",
-	empty: "<P></P>",
-}
-window.Text = Text
-window.Character = Character
 const placeholder = "hello"
 
-const initial = {
-	object: "value",
-	document: {
-		object: "document",
-		key: "root",
-		data: {},
-		nodes: [
-			{
-				object: "block",
-				type: "p",
-				isVoid: false,
-				data: {},
-				nodes: [
-					{
-						object: "text",
-						leaves: [{ object: "leaf", text: "", marks: [] }],
-					},
-				],
-			},
-		],
-	},
+const values = {
+	empty: Value.create(initial("")),
+	loading: Value.create(initial("LOADING...")),
+	syncing: Value.create(initial("SYNCING...")),
 }
 
 export default class extends Component {
 	constructor(props) {
 		super(props)
-		const { path, ipfs, y } = props
+		const value = values.empty
+		const path = getPath()
 		const loading = !!path
-		const value = Value.create(initial)
-		set(y.share.value, "document", walk(value.document, y))
-		this.state = { path, loading, value }
-		y.share.value.observeDeep(events => this.observe(events))
-		// y.share.value.observeDeep(events => console.log(events))
-		y.connector.onUserEvent(event => console.log("userevent! yaas", event))
-		this.local = false
+		const syncing = false
+		this.state = { root: null, path, value, loading, syncing }
+		this.flags = { local: false, reload: true }
+
+		this.y = null
+		this.ipfs = null
+		createIpfs().then(async ipfs => {
+			this.ipfs = ipfs
+			const room = niceware.generatePassphrase(6).join("-")
+			if (loading) {
+				const root = await load(ipfs, path)
+				const value = deserialize(root)
+				this.setState({ value, loading: false }, () => {
+					this.attach(ipfs, room, false)
+				})
+			} else {
+				this.attach(ipfs, room, false)
+			}
+		})
+	}
+
+	componentDidMount() {
+		window.addEventListener("keydown", event => {
+			const { keyCode, metaKey, ctrlKey, shiftKey } = event
+			const option = mac ? metaKey : ctrlKey
+			if (keyCode === 79 && option) {
+				event.preventDefault()
+				if (shiftKey) {
+					this.join()
+				} else {
+					this.open()
+				}
+			} else if (keyCode === 83 && option) {
+				event.preventDefault()
+				if (shiftKey) {
+					window.alert(this.room)
+				} else {
+					this.save()
+				}
+			}
+		})
+
+		window.addEventListener("hashchange", async event => {
+			event.preventDefault()
+			if (this.flags.reload) {
+				const path = getPath()
+				if (path === "") {
+					const value = values.empty
+					this.setState({ value }, () => {
+						if (this.y !== null) {
+							const walker = walk(value.document, this.y)
+							set(this.y.share.value, "document", walker)
+							this.y.share.value.set("path", path)
+						}
+					})
+				} else if (this.ipfs !== null) {
+					this.setState({ loading: true })
+					const root = await load(this.ipfs, path)
+					const value = deserialize(root)
+					this.setState({ value, loading: false }, () => {
+						if (this.y !== null) {
+							const walker = walk(value.document, this.y)
+							set(this.y.share.value, "document", walker)
+							this.y.share.value.set("path", path)
+						}
+					})
+				}
+			} else {
+				this.flags.reload = true
+			}
+		})
+	}
+
+	open() {
+		const hash = window.prompt("Enter a hash to load")
+		if (hash === null) {
+			// fine
+		} else {
+			window.location.hash = hash
+		}
+	}
+
+	async load(path, room, attach) {
+		console.log("loading and shit")
+
+		if (this.ipfs !== null) {
+			const root = await load(this.ipfs, path)
+			const value = deserialize(root)
+			this.setState({ value, loading: false }, () => {
+				if (attach) {
+					this.attach(this.ipfs, room, false)
+				}
+			})
+		}
+	}
+
+	async save() {
+		if (this.ipfs === null) {
+			return
+		}
+		const value = serialize(this.state.value)
+		const files = await save(this.ipfs, value)
+		files
+			.filter(({ path }) => path.split("/").pop() !== index)
+			.forEach(({ path, hash }) => {
+				if (path === key) {
+					this.flags.reload = false
+					window.location.hash = hash
+					if (this.y !== null) {
+						this.y.share.value.set("path", hash)
+					}
+				} else {
+					// const route = path.split("/").slice(1)
+					// const name = route[route.length - 1]
+					// const [node, content] = route.reduce(
+					// 	([child, parent], name) => {
+					// 		const nodes = parent.nodes.filter(node => node.type === tag)
+					// 		const node = nodes.find(
+					// 			node => node.nodes.get(0).text.indexOf(`@[${name}]`) === 0
+					// 		)
+					// 		return [node, node.nodes.get(1)]
+					// 	},
+					// 	[null, this.state.value.document]
+					// )
+					// const { key } = node.nodes.get(0)
+					// const header = createHeader({ name, path: hash })
+					// this.editor.change(change => change.replaceNodeByKey(key, header))
+				}
+			})
+	}
+
+	join() {
+		if (this.ipfs !== null) {
+			const room = window.prompt("Enter a room to join", this.room)
+			if (room && room !== this.room) {
+				this.attach(this.ipfs, room, true)
+			}
+		}
+	}
+
+	async attach(ipfs, room, sync) {
+		if (sync) {
+			this.setState({ syncing: true })
+		}
+		if (this.y !== null) {
+			await this.y.destroy()
+		}
+		this.y = await createYjs(ipfs, room)
+		this.y.connector.onUserEvent(event => console.log("userEvent", event))
+		this.room = room
+
+		if (sync) {
+			this.y.connector.whenSynced(event => {
+				const document = spawn(this.y.share.value.get("document"))
+				const path = this.y.share.value.get("path")
+				if (path && path !== this.state.path) {
+					this.flags.reload = false
+					window.location.hash = path
+				}
+				const selection = Range.create()
+				const value = this.state.value
+					.set("selection", selection)
+					.set("document", document)
+				this.setState({ value, syncing: false })
+				console.log("overwriting with synced document")
+			})
+		} else {
+			const walker = walk(this.state.value.document, this.y)
+			set(this.y.share.value, "document", walker)
+
+			const { path } = this.state
+			this.y.share.value.set("path", path || "")
+		}
+
+		this.y.share.value.observeDeep(event => this.observe(event))
 	}
 
 	onChange(change) {
-		// const { value } = change
-		// const value = this.state.value.set("selection", change.value.selection)
-		this.local = true
-		const value = change.operations.reduce(
-			(value, operation) => applyOperation(value, operation, this.props.y),
-			this.state.value
-		)
-		this.local = false
-		this.setState({ value })
-	}
-
-	observe(events) {
-		console.log("I am observing shit.")
-		if (this.local || !window.go) {
+		const { syncing, loading } = this.state
+		if (syncing || loading) {
 			return
 		}
-		const { value } = this.state
-		const root = [events].reduce((root, event) => {
-			console.log(event)
-			const { type, path, object } = event
-			const nodePath = path.slice(1).filter((n, i) => i % 2 === 1)
-			const node = nodePath.reduce((root, index) => root.nodes.get(index), root)
-			if (isText(object)) {
-				const { index, length, values } = event
-				const inserted = type === "insert" ? Character.createList(values) : []
-				const deleted = type === "insert" ? 0 : length
-				const args = [index, deleted, ...inserted]
-				const characters = node.characters.splice.apply(node.characters, args)
-				return root.updateNode(node.set("characters", characters))
-			} else if (isArray(object)) {
-				const { index, length, values } = event
-				const inserted = type === "insert" ? values.map(spawn) : []
-				const deleted = type === "insert" ? 0 : length
-				const args = [index, deleted, ...inserted]
-				const nodes = node.nodes.splice.apply(node.nodes, args)
-				return root.updateNode(node.set("nodes", nodes))
-			} else if (isMap(object)) {
-				console.log("missing a map thing")
-				return root
-				const key = target._parentSub
-				if (target === this.pool) {
-					const { keysChanged } = event
-					keysChanged.forEach(key => {
-						if (key) {
-							console.log("key", key)
-							console.log("target.get", target.get(key))
-							if (root.hasDescendant(key)) {
-								root = root.updateNode(spawn(target.get(key), this.pool))
-							}
-						}
-					})
-				} else {
-				}
-				return root
+		if (this.y === null) {
+			const { value } = change
+			this.setState({ value })
+		} else {
+			this.flags.local = true
+			const value = change.operations.reduce(
+				(value, operation) => applyOperation(value, operation, this.y),
+				this.state.value
+			)
+			this.flags.local = false
+			this.setState({ value })
+		}
+	}
+
+	observe(event) {
+		if (this.state.syncing) {
+			// ignore remote observations while syncing
+		} else if (this.flags.local) {
+			// ignore local observations
+		} else if (event.object === y.share.value && event.name === "path") {
+			// update hash
+			const path = y.share.value.get("path")
+			this.flags.reload = false
+			window.location.hash = path
+		} else {
+			const value = applyObservation(event, this.state.value)
+			if (value !== this.state.value) {
+				this.setState({ value })
 			}
-		}, value.document)
-		if (root !== value.document) {
-			console.log("got a new value", root)
-			this.setState({ value: value.set("document", root) })
 		}
 	}
 	render() {
-		const { value, loading } = this.state
+		const { value, loading, syncing } = this.state
+		const readOnly = loading || syncing
+		const renderValue = loading
+			? values.loading
+			: syncing ? values.syncing : value
 		return (
 			<Editor
 				plugins={plugins}
 				autoFocus={true}
 				ref={editor => (this.editor = window.editor = editor)}
 				schema={schema}
-				readOnly={loading}
-				value={value}
+				readOnly={readOnly}
+				value={renderValue}
 				placeholder={placeholder}
 				onChange={change => this.onChange(change)}
 				validateNode={node => validateNode(node, this.editor, this.root)}
@@ -153,31 +274,3 @@ export default class extends Component {
 		)
 	}
 }
-
-function spawn(y) {
-	if (isText(y)) {
-		const text = Text.create({ text: y.toString() })
-		y.key = text.key
-		return text
-	} else if (isMap(y)) {
-		const object = y.get("object")
-		const data = y.get("data")
-		const nodes = y
-			.get("nodes")
-			.toArray()
-			.map(spawn)
-		const properties = { object, data, nodes }
-		if (object === "block" || object === "inline") {
-			properties.type = y.get("type")
-			properties.isVoid = y.get("isVoid")
-		}
-		const node = constructorMap[object].create(properties)
-		y.key = node.key
-		return node
-	}
-}
-
-window.spawn = spawn
-window.Block = Block
-window.is = is
-window.Text = Text

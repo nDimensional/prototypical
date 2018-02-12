@@ -1,16 +1,18 @@
 import React from "react"
 import { tag } from "./utils.js"
 import { headingTypes } from "./schema.js"
+import { Map } from "immutable"
 
 const renderers = {
 	p({ attributes, children }) {
 		return <p {...attributes}>{children}</p>
 	},
 	img({ node: { data }, attributes, children }) {
+		const attrs = Map.isMap(data) ? data.toJS() : data
 		return (
 			<figure {...attributes}>
 				<figcaption>{children}</figcaption>
-				<img {...data.toJS()} {...attributes} />
+				<img {...attrs} {...attributes} />
 			</figure>
 		)
 	},
