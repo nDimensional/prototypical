@@ -1,79 +1,89 @@
-import { defaultType, text, createNode } from "./schema.js"
-import { load, tag, headerTag, contentTag } from "./utils"
-import { deserialize } from "./serialize.jsx"
+import { Map, is } from "immutable"
+import { defaultType, blockTests, createTextContent } from "./schema.js"
+import { tag, headerTag, contentTag } from "./utils"
 
-function getText(block) {
-	const { type } = block
-	// if (type === tag) {
-	// 	if (block.nodes.size === 2 && block.nodes.get(0).type === headerTag) {
-	// 		return block.nodes.get(0).text
-	// 	}
-	// }
+function getBlockType(text) {
+	const type = Object.keys(blockTests).find(key => blockTests[key].test(text))
+	return type || defaultType
+}
+
+function getBlockText(block) {
+	if (block.type === tag) {
+		return block.nodes.get(0).text
+	}
 	return block.text
 }
 
-// function loadNode(editor, { name, path }, key) {
-// 	load(editor.props.node, path).then(root => {
-// 		const { document: { nodes } } = deserialize(root)
-// 		const node = createNode({ name, path, loading: false }, nodes)
-// 		editor.change(change => change.replaceNodeByKey(key, node))
-// 	})
-// }
-
-function validateBlock(block, editor, root) {
-	if (block.type === "please-wrap-me") {
-		// okay
-		// const data = {name: "Test Name", path: "foobar"}
-		// const {nodes, key} = block.toJS()
-		// return change => change.replaceNodeByKey(block.key, createNode(data, nodes))
+function getBlockData(type, text) {
+	if (type === "img") {
+		const [match, alt, src] = blockTests.img.exec(text)
+		return Map({ alt, src })
+	} else if (type === tag) {
+		const [match, prefix, name, path] = blockTests[tag].exec(text)
+		const depth = prefix.length
+		return Map({ depth, name, path })
+	} else {
+		return Map()
 	}
+}
 
+function validateBlock(block, editor, ipfs) {
 	if (block.type === headerTag || block.type === contentTag) {
 		return
 	}
 
-	const updates = {}
+	const text = getBlockText(block)
+	const type = getBlockType(text)
 
-	// Type
-	const blockText = getText(block)
-	const type =
-		Object.keys(text).find(key => text[key].test(blockText)) || defaultType
-	if (block.type !== type) {
-		updates.type = type
-	}
+	console.log("type", type)
 
-	// Data
-	if (type === "img") {
-		const [match, alt, src] = text.img.exec(blockText)
-		if (
-			!block.data ||
-			alt !== block.data.get("alt") ||
-			src !== block.data.get("src")
-		) {
-			updates.data = { alt, src }
+	if (block.type === type) {
+		const data = getBlockData(block.type, text)
+		if (data.size > 0 && !is(data, block.data)) {
+			return change => change.setNodeByKey(block.key, { data })
 		}
+	} else if (block.type === tag) {
+		return transitionFromNode(type, text, block, editor, ipfs)
 	} else if (type === tag) {
-		// const [match, name, path] = text[tag].exec(blockText)
-		// if (block.data) {
-		// 	const data = block.data.toJS()
-		// 	if (data.path !== path) {
-		// 		if (!data.loading) {
-		// 			updates.data = { name, path, loading: true }
-		// 			loadNode(editor, { name, path }, block.key)
-		// 		}
-		// 	} else if (data.name !== name) {
-		// 		updates.data = { name, path, loading: false }
-		// 	}
-		// } else {
-		// 	updates.data = { name, path, loading: true }
-		// 	loadNode(editor, { name, path }, block.key)
-		// }
+		return transitionToNode(type, text, block, editor, ipfs)
+	} else if (type === "img") {
+		// transition to img from header
+		const data = getBlockData(type, text)
+		return change => change.setNodeByKey(block.key, { type, data })
+	} else {
+		// transition to header from header or img
+		return change => change.setNodeByKey(block.key, { type })
 	}
+}
 
-	// Return collective change
-	if (Object.keys(updates).length > 0) {
-		return change => change.setNodeByKey(block.key, updates)
-	}
+function transitionFromNode(type, text, block, editor, ipfs) {
+	const header = block.nodes.get(0)
+	return change =>
+		change.withoutNormalization(change => {
+			const parent = change.value.document.getParent(block.key)
+			const index = parent.nodes.indexOf(block)
+			change
+				.moveNodeByKey(header.key, parent.key, index)
+				.setNodeByKey(header.key, { type })
+				.removeNodeByKey(block.key)
+		})
+}
+
+function transitionToNode(type, text, block, editor, ipfs) {
+	// type === tag
+	const data = getBlockData(type, text)
+	const furthest = editor.value.document.getFurthest(
+		block.key,
+		node => node.type === tag
+	)
+	console.log("got furthest", furthest)
+	return change =>
+		change.withoutNormalization(change => {
+			change.setNodeByKey(block.key, headerTag)
+			change.wrapBlockByKey(block.key, { type, data })
+			const parent = change.value.document.getParent(block.key)
+			change.insertNodeByKey(parent.key, 1, createTextContent("foobar"))
+		})
 }
 
 export default function validateNode(node, editor, root) {

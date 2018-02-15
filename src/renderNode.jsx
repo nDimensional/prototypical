@@ -1,36 +1,34 @@
 import React from "react"
 import { tag } from "./utils.js"
-import { headingTypes } from "./schema.js"
+import { headingTypes, defaultType } from "./schema.js"
 import { Map } from "immutable"
 
 const renderers = {
-	p({ attributes, children }) {
-		return <p {...attributes}>{children}</p>
-	},
 	img({ node: { data }, attributes, children }) {
-		const attrs = Map.isMap(data) ? data.toJS() : data
 		return (
-			<figure {...attributes}>
-				<figcaption>{children}</figcaption>
-				<img {...attrs} {...attributes} />
-			</figure>
+			<p {...attributes}>
+				{children}
+				<img {...data.toJS()} />
+			</p>
 		)
 	},
-	[tag]({ attributes, children }) {
+	[tag]({ attributes, children, node: { data } }) {
 		const [caption, ...content] = children
+		const depth = data.get("depth")
+		const headingType = headingTypes[depth]
 		return (
-			<figure {...attributes}>
-				<figcaption>{caption}</figcaption>
-				<hr />
+			<div {...attributes}>
+				{React.createElement(headingType, {}, caption)}
 				{content}
-			</figure>
+				<hr />
+			</div>
 		)
 	},
 }
 
 export default function renderNode(props) {
 	const { node: { type }, attributes, children } = props
-	if (headingTypes.includes(type)) {
+	if (type === defaultType || headingTypes.includes(type)) {
 		return React.createElement(type, attributes, children)
 	} else if (renderers.hasOwnProperty(type)) {
 		return renderers[type](props)

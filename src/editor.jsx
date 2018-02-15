@@ -2,13 +2,13 @@ import "babel-polyfill"
 import React, { Component } from "react"
 import { Editor } from "slate-react"
 import { Value, Range } from "slate"
-import niceware from "niceware"
+// import niceware from "niceware"
 
 import { initial, serialize, deserialize } from "./serialize.jsx"
 import schema, { createHeader } from "./schema.js"
 
-import applyOperation, { walk } from "./operation"
-import applyObservation, { spawn } from "./observation"
+// import applyOperation, { walk } from "./operation"
+// import applyObservation, { spawn } from "./observation"
 
 import validateNode from "./validateNode"
 import renderMark from "./renderMark.jsx"
@@ -18,8 +18,8 @@ import decorateNode from "./decorateNode"
 import { autoClose, indent } from "./plugins"
 import { getPath, mac, save, load, key, index } from "./utils"
 
-import createYjs, { set } from "./y"
-import createIpfs from "./ipfs"
+// import createYjs, { set } from "./y"
+// import createIpfs from "./ipfs"
 
 const plugins = [autoClose(["[]", "()"]), indent()]
 
@@ -43,71 +43,70 @@ export default class extends Component {
 
 		this.y = null
 		this.ipfs = null
-		createIpfs().then(async ipfs => {
-			this.ipfs = ipfs
-			const room = niceware.generatePassphrase(6).join("-")
-			if (loading) {
-				const root = await load(ipfs, path)
-				const value = deserialize(root)
-				this.setState({ value, loading: false }, () => {
-					this.attach(ipfs, room, false)
-				})
-			} else {
-				this.attach(ipfs, room, false)
-			}
-		})
+		// createIpfs().then(async ipfs => {
+		// 	this.ipfs = ipfs
+		// 	const room = niceware.generatePassphrase(6).join("-")
+		// 	if (loading) {
+		// 		const root = await load(ipfs, path)
+		// 		const value = deserialize(root)
+		// 		this.setState({ value, loading: false }, () => {
+		// 			this.attach(ipfs, room, false)
+		// 		})
+		// 	} else {
+		// 		this.attach(ipfs, room, false)
+		// 	}
+		// })
 	}
 
 	componentDidMount() {
-		window.addEventListener("keydown", event => {
-			const { keyCode, metaKey, ctrlKey, shiftKey } = event
-			const option = mac ? metaKey : ctrlKey
-			if (keyCode === 79 && option) {
-				event.preventDefault()
-				if (shiftKey) {
-					this.join()
-				} else {
-					this.open()
-				}
-			} else if (keyCode === 83 && option) {
-				event.preventDefault()
-				if (shiftKey) {
-					window.alert(this.room)
-				} else {
-					this.save()
-				}
-			}
-		})
-
-		window.addEventListener("hashchange", async event => {
-			event.preventDefault()
-			if (this.flags.reload) {
-				const path = getPath()
-				if (path === "") {
-					const value = values.empty
-					this.setState({ value }, () => {
-						if (this.y !== null) {
-							const walker = walk(value.document, this.y)
-							set(this.y.share.value, "document", walker)
-							this.y.share.value.set("path", path)
-						}
-					})
-				} else if (this.ipfs !== null) {
-					this.setState({ loading: true })
-					const root = await load(this.ipfs, path)
-					const value = deserialize(root)
-					this.setState({ value, loading: false }, () => {
-						if (this.y !== null) {
-							const walker = walk(value.document, this.y)
-							set(this.y.share.value, "document", walker)
-							this.y.share.value.set("path", path)
-						}
-					})
-				}
-			} else {
-				this.flags.reload = true
-			}
-		})
+		// window.addEventListener("keydown", event => {
+		// 	const { keyCode, metaKey, ctrlKey, shiftKey } = event
+		// 	const option = mac ? metaKey : ctrlKey
+		// 	if (keyCode === 79 && option) {
+		// 		event.preventDefault()
+		// 		if (shiftKey) {
+		// 			this.join()
+		// 		} else {
+		// 			this.open()
+		// 		}
+		// 	} else if (keyCode === 83 && option) {
+		// 		event.preventDefault()
+		// 		if (shiftKey) {
+		// 			window.alert(this.room)
+		// 		} else {
+		// 			this.save()
+		// 		}
+		// 	}
+		// })
+		// window.addEventListener("hashchange", async event => {
+		// 	event.preventDefault()
+		// 	if (this.flags.reload) {
+		// 		const path = getPath()
+		// 		if (path === "") {
+		// 			const value = values.empty
+		// 			this.setState({ value }, () => {
+		// 				if (this.y !== null) {
+		// 					const walker = walk(value.document, this.y)
+		// 					set(this.y.share.value, "document", walker)
+		// 					this.y.share.value.set("path", path)
+		// 				}
+		// 			})
+		// 		} else if (this.ipfs !== null) {
+		// 			this.setState({ loading: true })
+		// 			const root = await load(this.ipfs, path)
+		// 			const value = deserialize(root)
+		// 			this.setState({ value, loading: false }, () => {
+		// 				if (this.y !== null) {
+		// 					const walker = walk(value.document, this.y)
+		// 					set(this.y.share.value, "document", walker)
+		// 					this.y.share.value.set("path", path)
+		// 				}
+		// 			})
+		// 		}
+		// 	} else {
+		// 		this.flags.reload = true
+		// 	}
+		// })
 	}
 
 	open() {
@@ -120,8 +119,6 @@ export default class extends Component {
 	}
 
 	async load(path, room, attach) {
-		console.log("loading and shit")
-
 		if (this.ipfs !== null) {
 			const root = await load(this.ipfs, path)
 			const value = deserialize(root)
@@ -214,6 +211,24 @@ export default class extends Component {
 		this.y.share.value.observeDeep(event => this.observe(event))
 	}
 
+	observe(event) {
+		if (this.state.syncing) {
+			// ignore remote observations while syncing
+		} else if (this.flags.local) {
+			// ignore local observations
+		} else if (event.object === y.share.value && event.name === "path") {
+			// update hash
+			const path = y.share.value.get("path")
+			this.flags.reload = false
+			window.location.hash = path
+		} else {
+			const value = applyObservation(event, this.state.value)
+			if (value !== this.state.value) {
+				this.setState({ value })
+			}
+		}
+	}
+
 	onChange(change) {
 		const { syncing, loading } = this.state
 		if (syncing || loading) {
@@ -233,29 +248,9 @@ export default class extends Component {
 		}
 	}
 
-	observe(event) {
-		if (this.state.syncing) {
-			// ignore remote observations while syncing
-		} else if (this.flags.local) {
-			// ignore local observations
-		} else if (event.object === y.share.value && event.name === "path") {
-			// update hash
-			const path = y.share.value.get("path")
-			this.flags.reload = false
-			window.location.hash = path
-		} else {
-			const value = applyObservation(event, this.state.value)
-			if (value !== this.state.value) {
-				this.setState({ value })
-			}
-		}
-	}
 	render() {
 		const { value, loading, syncing } = this.state
 		const readOnly = loading || syncing
-		const renderValue = loading
-			? values.loading
-			: syncing ? values.syncing : value
 		return (
 			<Editor
 				plugins={plugins}
@@ -263,10 +258,10 @@ export default class extends Component {
 				ref={editor => (this.editor = window.editor = editor)}
 				schema={schema}
 				readOnly={readOnly}
-				value={renderValue}
+				value={value}
 				placeholder={placeholder}
 				onChange={change => this.onChange(change)}
-				validateNode={node => validateNode(node, this.editor, this.root)}
+				validateNode={node => validateNode(node, this.editor, this.ipfs)}
 				decorateNode={decorateNode}
 				renderNode={renderNode}
 				renderMark={renderMark}

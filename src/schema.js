@@ -2,14 +2,14 @@ import { Block } from "slate"
 import { tag, headerTag, contentTag } from "./utils.js"
 
 export const defaultType = "p"
-export const headingTypes = ["h1", "h2", "h3", "blockquote"]
-export const blockTypes = [defaultType, ...headingTypes, "img", tag]
+export const headingTypes = ["blockquote", "h1", "h2", "h3"]
+export const blockTypes = [defaultType, "img", tag, ...headingTypes]
 export const markTypes = ["strong", "em", "u", "code", "a"]
 
 export const pathTest = /[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{46}/
-export const text = {
-	// [tag]: /^@\[([^\[]*)]\(([^)]+)\)$/,
-	img: /^!\[([^\[]*)]\(([^)]+)\)$/,
+export const blockTests = {
+	[tag]: /^(#{1,3})\[([^\[]+)\]\(([^)]+)\)$/,
+	img: /^!\[([^\[]+)]\(([^)]+)\)$/,
 	h1: /^#($|[^#])/,
 	h2: /^##($|[^#])/,
 	h3: /^###($|[^#])/,
@@ -24,7 +24,7 @@ export const headings = {
 }
 
 const documentSchema = { nodes: [{ types: blockTypes, min: 1 }] }
-const blockSchema = { nodes: [{ objects: ["text"] }] }
+const blockSchema = { nodes: [{ objects: ["text"], min: 1 }] }
 
 export function createText(content) {
 	return {
@@ -40,6 +40,7 @@ export function createText(content) {
 }
 
 export function createNode(data, nodes) {
+	// data has path, name, and depth
 	return {
 		object: "block",
 		data,
@@ -49,12 +50,12 @@ export function createNode(data, nodes) {
 	}
 }
 
-export function createHeader({ name, path }) {
+export function createHeader({ depth, name, path }) {
 	return {
 		object: "block",
 		type: headerTag,
 		isVoid: false,
-		nodes: [createText(`@[${name}](${path})`)],
+		nodes: [createText(`${"#".repeat(depth)}[${name}](${path})`)],
 	}
 }
 
@@ -65,6 +66,24 @@ export function createContent(nodes) {
 		data: {},
 		isVoid: false,
 		nodes,
+	}
+}
+
+export function createTextContent(text) {
+	return {
+		object: "block",
+		type: contentTag,
+		data: {},
+		isVoid: false,
+		nodes: [
+			{
+				object: "block",
+				type: defaultType,
+				data: {},
+				isVoid: false,
+				nodes: [createText(text)],
+			},
+		],
 	}
 }
 
@@ -101,56 +120,52 @@ export default {
 	document: documentSchema,
 	blocks: {
 		[defaultType]: blockSchema,
-		...headingSchema,
 		img: blockSchema,
-		// 	[tag]: {
-		// 		nodes: [
-		// 			{ objects: ["block"], types: [headerTag], min: 1, max: 1 },
-		// 			{ objects: ["block"], types: [contentTag], min: 1, max: 1 },
-		// 		],
-		// 		normalize(change, reason, context) {
-		// 			if (reason === "child_object_invalid") {
-		// 				const { node, rule, child, index } = context
-		// 				if (child.object === "text" && index === 0) {
-		// 					change.wrapBlockByKey(child.key, headerTag)
-		// 				}
-		// 			} else if (reason === "child_required") {
-		// 				const { node, rule, index } = context
-		// 				if (index === 1) {
-		// 					change.insertNodeByKey(node.key, index, Block.create(emptyContent))
-		// 				}
-		// 			}
-		// 		},
-		// 	},
-		// 	[headerTag]: {
-		// 		parent: {
-		// 			objects: ["block"],
-		// 			types: [tag],
-		// 			...blockSchema,
-		// 		},
-		// 		normalize(change, reason, context) {
-		// 			if (reason === "parent_type_invalid") {
-		// 				const { node, parent, rule } = context
-		// 				if (node.nodes.size === 1 && node.nodes.get(0).object === "text") {
-		// 					change.insertNodeByKey(parent.key, 0, node.nodes.get(0))
-		// 				} else {
-		// 					console.log("panic! At the disco.")
-		// 				}
-		// 			}
-		// 		},
-		// 	},
-		// 	[contentTag]: {
-		// 		parent: {
-		// 			objects: ["block"],
-		// 			types: [tag],
-		// 			...documentSchema,
-		// 		},
-		// 		normalize(change, reason, context) {
-		// 			if (reason === "parent_type_invalid") {
-		// 				const { node, parent, rule } = context
-		// 				// Actually we should just delete this, so don't do anything
-		// 			}
-		// 		},
-		// 	},
+		...headingSchema,
+		[tag]: {
+			nodes: [
+				{ objects: ["block"], types: [headerTag], min: 1, max: 1 },
+				{ objects: ["block"], types: [contentTag], min: 1, max: 1 },
+			],
+			normalize(change, reason, context) {
+				console.log("normalizing node", reason)
+				if (reason === "child_object_invalid") {
+					const { node, rule, child, index } = context
+					if (child.object === "text" && index === 0) {
+						change.wrapBlockByKey(child.key, headerTag)
+					}
+				} else if (reason === "child_required") {
+					const { node, rule, index } = context
+					if (index === 1) {
+						change.insertNodeByKey(node.key, index, Block.create(emptyContent))
+					}
+				}
+			},
+		},
+		[headerTag]: {
+			parent: { objects: ["block"], types: [tag] },
+			...blockSchema,
+			normalize(change, reason, context) {
+				console.log("normalizing header")
+				if (reason === "parent_type_invalid") {
+					const { node, parent, rule } = context
+					if (node.nodes.size === 1 && node.nodes.get(0).object === "text") {
+						change.insertNodeByKey(parent.key, 0, node.nodes.get(0))
+					} else {
+					}
+				}
+			},
+		},
+		[contentTag]: {
+			parent: { objects: ["block"], types: [tag] },
+			...documentSchema,
+			normalize(change, reason, context) {
+				console.log("normalizing content")
+				if (reason === "parent_type_invalid") {
+					const { node, parent, rule } = context
+					// Actually we should just delete this, so don't do anything
+				}
+			},
+		},
 	},
 }

@@ -47,7 +47,7 @@ const rules = [
 			if (object === "block") {
 				if (headings.hasOwnProperty(type)) {
 					const [[first, ...rest], ...last] = children.toJS()
-					if (first && text[type].test(first[0])) {
+					if (first && blockTests[type].test(first[0])) {
 						const { length } = headings[type]
 						first[0] = first[0].slice(length).trim()
 						return React.createElement(type, {}, [[first, ...rest], ...last])
