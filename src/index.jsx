@@ -2,4 +2,10 @@ import React from "react"
 import ReactDOM from "react-dom"
 import Editor from "./editor.jsx"
 
-ReactDOM.render(<Editor />, document.querySelector("main"))
+import createIpfs from "./ipfs"
+
+const header = document.querySelector("header")
+const main = document.querySelector("main")
+
+createIpfs().then(ipfs => ReactDOM.render(<Editor ipfs={ipfs} />, main))
+// ReactDOM.render(<Editor ipfs={null} />, main)

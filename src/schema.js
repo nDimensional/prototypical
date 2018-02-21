@@ -1,30 +1,43 @@
-import { Block } from "slate"
-import { tag, headerTag, contentTag } from "./utils.js"
+import { tag } from "./utils.js"
 
-export const defaultType = "p"
-export const headingTypes = ["h1", "h2", "h3", "blockquote"]
-export const blockTypes = [defaultType, ...headingTypes, "img", tag]
+export const paragraphType = "p"
+export const imageType = "img"
+export const listItemType = "li"
+export const blockquoteItemType = "div"
+export const listItemTypes = [listItemType, blockquoteItemType]
+export const headingTypes = ["h1", "h2", "h3"]
+export const listTypes = ["blockquote", "ul"]
+export const blockTypes = [
+	paragraphType,
+	...headingTypes,
+	imageType,
+	...listTypes,
+	...listItemTypes,
+]
+
+export const listItemMap = {
+	ul: listItemType,
+	blockquote: blockquoteItemType,
+}
+
 export const markTypes = ["strong", "em", "u", "code", "a"]
 
-export const pathTest = /[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{46}/
-export const text = {
-	// [tag]: /^@\[([^\[]*)]\(([^)]+)\)$/,
+export const blockTests = {
 	img: /^!\[([^\[]*)]\(([^)]+)\)$/,
 	h1: /^#($|[^#])/,
 	h2: /^##($|[^#])/,
 	h3: /^###($|[^#])/,
 	blockquote: /^>($|[^>])/,
+	ul: /^-($|[^-])/,
 }
 
-export const headings = {
+export const prefixes = {
 	h1: "#",
 	h2: "##",
 	h3: "###",
-	blockquote: ">",
+	[blockquoteItemType]: ">",
+	[listItemType]: "-",
 }
-
-const documentSchema = { nodes: [{ types: blockTypes, min: 1 }] }
-const blockSchema = { nodes: [{ objects: ["text"] }] }
 
 export function createText(content) {
 	return {
@@ -39,118 +52,39 @@ export function createText(content) {
 	}
 }
 
-export function createNode(data, nodes) {
-	return {
-		object: "block",
-		data,
-		type: tag,
-		isVoid: false,
-		nodes: [createHeader(data), createContent(nodes)],
-	}
+const documentSchema = { nodes: [{ types: blockTypes, min: 1 }] }
+const blockSchema = {
+	nodes: [{ objects: ["text"], min: 1 }],
+	normalize(change, reason, context) {
+		console.log("normalizing block schema", reason, context)
+	},
 }
+const listSchema = type => ({
+	nodes: [{ objects: ["block"], types: [listItemMap[type]], min: 1 }],
+	normalize(change, reason, context) {
+		console.log("normalizing list schema", type, reason, context)
+	},
+})
 
-export function createHeader({ name, path }) {
-	return {
-		object: "block",
-		type: headerTag,
-		isVoid: false,
-		nodes: [createText(`@[${name}](${path})`)],
-	}
-}
+const ListItemSchema = type => ({
+	...blockSchema,
+	normalize(change, reason, context) {
+		console.log("normalizing list item schema", reason, context)
+	},
+})
 
-export function createContent(nodes) {
-	return {
-		object: "block",
-		type: contentTag,
-		data: {},
-		isVoid: false,
-		nodes,
-	}
-}
-
-export const emptyText = createText("")
-
-export const emptyBlock = {
-	object: "block",
-	type: defaultType,
-	data: {},
-	isVoid: false,
-	nodes: [emptyText],
-}
-
-export const emptyHeader = {
-	object: "block",
-	type: headerTag,
-	data: {},
-	isVoid: false,
-	nodes: [emptyText],
-}
-
-export const emptyContent = {
-	object: "block",
-	type: contentTag,
-	data: {},
-	isVoid: false,
-	nodes: [emptyBlock],
-}
-
-const headingSchema = {}
-headingTypes.forEach(headingType => (headingSchema[headingType] = blockSchema))
+const headingSchemas = {}
+headingTypes.forEach(type => (headingSchemas[type] = blockSchema))
+const listSchemas = {}
+listTypes.forEach(type => (listSchemas[type] = listSchema(type)))
 
 export default {
 	document: documentSchema,
 	blocks: {
-		[defaultType]: blockSchema,
-		...headingSchema,
-		img: blockSchema,
-		// 	[tag]: {
-		// 		nodes: [
-		// 			{ objects: ["block"], types: [headerTag], min: 1, max: 1 },
-		// 			{ objects: ["block"], types: [contentTag], min: 1, max: 1 },
-		// 		],
-		// 		normalize(change, reason, context) {
-		// 			if (reason === "child_object_invalid") {
-		// 				const { node, rule, child, index } = context
-		// 				if (child.object === "text" && index === 0) {
-		// 					change.wrapBlockByKey(child.key, headerTag)
-		// 				}
-		// 			} else if (reason === "child_required") {
-		// 				const { node, rule, index } = context
-		// 				if (index === 1) {
-		// 					change.insertNodeByKey(node.key, index, Block.create(emptyContent))
-		// 				}
-		// 			}
-		// 		},
-		// 	},
-		// 	[headerTag]: {
-		// 		parent: {
-		// 			objects: ["block"],
-		// 			types: [tag],
-		// 			...blockSchema,
-		// 		},
-		// 		normalize(change, reason, context) {
-		// 			if (reason === "parent_type_invalid") {
-		// 				const { node, parent, rule } = context
-		// 				if (node.nodes.size === 1 && node.nodes.get(0).object === "text") {
-		// 					change.insertNodeByKey(parent.key, 0, node.nodes.get(0))
-		// 				} else {
-		// 					console.log("panic! At the disco.")
-		// 				}
-		// 			}
-		// 		},
-		// 	},
-		// 	[contentTag]: {
-		// 		parent: {
-		// 			objects: ["block"],
-		// 			types: [tag],
-		// 			...documentSchema,
-		// 		},
-		// 		normalize(change, reason, context) {
-		// 			if (reason === "parent_type_invalid") {
-		// 				const { node, parent, rule } = context
-		// 				// Actually we should just delete this, so don't do anything
-		// 			}
-		// 		},
-		// 	},
+		[paragraphType]: blockSchema,
+		[listItemType]: blockSchema,
+		[imageType]: blockSchema,
+		...headingSchemas,
+		...listSchemas,
 	},
 }

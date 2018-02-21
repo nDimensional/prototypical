@@ -1,7 +1,10 @@
 import { isText, isMap, isArray, isType } from "./y"
-import { Map } from "immutable"
+import { is, Map, List } from "immutable"
 import { Text, Block, Inline, Document, Character } from "slate"
 import { updateSelectionRemove } from "./operation"
+
+window.is = is
+window.List = List
 
 const constructorMap = {
 	block: Block,
@@ -33,7 +36,9 @@ export function spawn(y) {
 	}
 }
 
-export default function applyObservation(event, value) {
+window.spawn = spawn
+
+export default function(event, value) {
 	const { type, path, object } = event
 	let { selection, document } = value
 	const nodePath = path.slice(1).filter((n, i) => i % 2 === 1)
@@ -56,11 +61,46 @@ export default function applyObservation(event, value) {
 			.set("anchorOffset", anchorOffset)
 			.set("focusOffset", focusOffset)
 	} else if (isArray(object)) {
+		console.log("arrayEvent", event)
 		const { index, length, values } = event
 		const inserted = type === "insert" ? values.map(spawn) : []
 		const deleted = type === "insert" ? 0 : length
 		const args = [index, deleted, ...inserted]
 		const nodes = node.nodes.splice.apply(node.nodes, args)
+		const violations = value.data.get("violations")
+		if (type === "delete") {
+			const filtered = violations.filter(path =>
+				is(List(nodePath), path.slice(0, nodePath.length))
+			)
+			if (nodes.size === 0) {
+				value = value.set(
+					"data",
+					value.data.set("violations", filtered.push(nodePath))
+				)
+			} else {
+				value = value.set("data", value.data.set("violations", filtered))
+			}
+		} else if (type === "insert") {
+			const nodeIndex = violations.indexOf(List(nodePath))
+			const filtered = violations.push.apply(
+				violations,
+				inserted
+					.filter(value => value.object === "block" && value.nodes.size === 0)
+					.map(value => {
+						const p = nodePath.concat([index + inserted.indexOf(value)])
+						console.log("mapping an inserted nodePath", nodePath, p)
+						return List(p)
+					})
+			)
+			if (nodeIndex >= 0) {
+				value = value.set(
+					"data",
+					value.data.set("violations", filtered.delete(nodeIndex))
+				)
+			} else {
+				value = value.set("data", value.data.set("violations", filtered))
+			}
+		}
 		if (type === "delete") {
 			selection = node.nodes
 				.slice(index, index + length)

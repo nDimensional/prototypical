@@ -1,11 +1,14 @@
 import "babel-polyfill"
 import React, { Component } from "react"
 import { Editor } from "slate-react"
-import { Value, Range } from "slate"
+import { Value, Change, Schema } from "slate"
+import { Map, List } from "immutable"
 import niceware from "niceware"
 
-import { initial, serialize, deserialize } from "./serialize.jsx"
-import schema, { createHeader } from "./schema.js"
+import createYjs, { set, Y } from "./y"
+
+import { initial, save, load, key, index } from "./serialize.jsx"
+import schema from "./schema.js"
 
 import applyOperation, { walk } from "./operation"
 import applyObservation, { spawn } from "./observation"
@@ -15,14 +18,12 @@ import renderMark from "./renderMark.jsx"
 import renderNode from "./renderNode.jsx"
 import decorateNode from "./decorateNode"
 
-import { autoClose, indent } from "./plugins"
-import { getPath, mac, save, load, key, index } from "./utils"
+import { getPath, getRoom, mac } from "./utils"
+import { autoClose } from "./plugins"
 
-import createYjs, { set } from "./y"
-import createIpfs from "./ipfs"
+window.Value = Value
 
-const plugins = [autoClose(["[]", "()"]), indent()]
-
+const plugins = [autoClose(["[]", "()"])]
 const placeholder = "hello"
 
 const values = {
@@ -36,44 +37,55 @@ export default class extends Component {
 		super(props)
 		const value = values.empty
 		const path = getPath()
+		const room = getRoom()
 		const loading = !!path
-		const syncing = false
-		this.state = { root: null, path, value, loading, syncing }
-		this.flags = { local: false, reload: true }
-
+		const syncing = !!room
+		this.state = { room, path, value, loading, syncing, error: false }
+		this.flags = { local: false }
+		this.queue = {}
+		this.ipfs = this.props.ipfs
 		this.y = null
-		this.ipfs = null
-		createIpfs().then(async ipfs => {
-			this.ipfs = ipfs
-			const room = niceware.generatePassphrase(6).join("-")
-			if (loading) {
-				const root = await load(ipfs, path)
-				const value = deserialize(root)
-				this.setState({ value, loading: false }, () => {
-					this.attach(ipfs, room, false)
-				})
-			} else {
-				this.attach(ipfs, room, false)
-			}
-		})
 	}
 
 	componentDidMount() {
+		const { syncing, loading, room, path } = this.state
+		if (syncing && this.ipfs !== null) {
+			this.join(room)
+		} else if (loading && this.ipfs !== null) {
+			load(this.ipfs, path).then(value =>
+				this.setState({ value, loading: false })
+			)
+		}
+
+		window.setValue = value => this.setState({ value })
+
 		window.addEventListener("keydown", event => {
 			const { keyCode, metaKey, ctrlKey, shiftKey } = event
 			const option = mac ? metaKey : ctrlKey
 			if (keyCode === 79 && option) {
 				event.preventDefault()
 				if (shiftKey) {
-					this.join()
+					// Join a room
+					const room = window.prompt("Enter a room to join", this.state.room)
+					if (room && room !== this.state.room) {
+						window.history.pushState({}, room, `?${room}`)
+						this.join(room)
+					}
 				} else {
-					this.open()
+					// Load a hash
+					const path = window.prompt("Enter a hash to load", this.state.path)
+					if (path && path !== this.state.path) {
+						window.history.pushState({}, path, `#${path}`)
+						this.open(path)
+					}
 				}
 			} else if (keyCode === 83 && option) {
 				event.preventDefault()
 				if (shiftKey) {
-					window.alert(this.room)
+					// Show the room to join
+					this.share()
 				} else {
+					// Save the hash
 					this.save()
 				}
 			}
@@ -81,145 +93,99 @@ export default class extends Component {
 
 		window.addEventListener("hashchange", async event => {
 			event.preventDefault()
-			if (this.flags.reload) {
-				const path = getPath()
-				if (path === "") {
-					const value = values.empty
-					this.setState({ value }, () => {
-						if (this.y !== null) {
-							const walker = walk(value.document, this.y)
-							set(this.y.share.value, "document", walker)
-							this.y.share.value.set("path", path)
-						}
-					})
-				} else if (this.ipfs !== null) {
-					this.setState({ loading: true })
-					const root = await load(this.ipfs, path)
-					const value = deserialize(root)
-					this.setState({ value, loading: false }, () => {
-						if (this.y !== null) {
-							const walker = walk(value.document, this.y)
-							set(this.y.share.value, "document", walker)
-							this.y.share.value.set("path", path)
-						}
-					})
-				}
+			const path = getPath()
+			if (path === "") {
+				this.setState({ value: values.empty, path })
 			} else {
-				this.flags.reload = true
+				this.open(path)
 			}
 		})
 	}
 
-	open() {
-		const hash = window.prompt("Enter a hash to load")
-		if (hash === null) {
-			// fine
-		} else {
-			window.location.hash = hash
-		}
+	componentDidCatch(error, info) {
+		console.error(error, info)
+		this.setState({ error: true })
 	}
 
-	async load(path, room, attach) {
-		console.log("loading and shit")
+	shouldComponentUpdate(props, state) {
+		return state.value.data.get("violations").size === 0
+	}
 
+	async open(path) {
 		if (this.ipfs !== null) {
-			const root = await load(this.ipfs, path)
-			const value = deserialize(root)
-			this.setState({ value, loading: false }, () => {
-				if (attach) {
-					this.attach(this.ipfs, room, false)
-				}
-			})
-		}
-	}
-
-	async save() {
-		if (this.ipfs === null) {
-			return
-		}
-		const value = serialize(this.state.value)
-		const files = await save(this.ipfs, value)
-		files
-			.filter(({ path }) => path.split("/").pop() !== index)
-			.forEach(({ path, hash }) => {
-				if (path === key) {
-					this.flags.reload = false
-					window.location.hash = hash
-					if (this.y !== null) {
-						this.y.share.value.set("path", hash)
-					}
-				} else {
-					// const route = path.split("/").slice(1)
-					// const name = route[route.length - 1]
-					// const [node, content] = route.reduce(
-					// 	([child, parent], name) => {
-					// 		const nodes = parent.nodes.filter(node => node.type === tag)
-					// 		const node = nodes.find(
-					// 			node => node.nodes.get(0).text.indexOf(`@[${name}]`) === 0
-					// 		)
-					// 		return [node, node.nodes.get(1)]
-					// 	},
-					// 	[null, this.state.value.document]
-					// )
-					// const { key } = node.nodes.get(0)
-					// const header = createHeader({ name, path: hash })
-					// this.editor.change(change => change.replaceNodeByKey(key, header))
-				}
-			})
-	}
-
-	join() {
-		if (this.ipfs !== null) {
-			const room = window.prompt("Enter a room to join", this.room)
-			if (room && room !== this.room) {
-				this.attach(this.ipfs, room, true)
+			this.setState({ loading: true, room: "", path })
+			if (this.y !== null) {
+				this.y.destroy()
+				this.y = null
 			}
+			const value = await load(this.ipfs, path)
+			this.setState({ value, loading: false })
 		}
 	}
 
-	async attach(ipfs, room, sync) {
-		if (sync) {
-			this.setState({ syncing: true })
-		}
-		if (this.y !== null) {
-			await this.y.destroy()
-		}
-		this.y = await createYjs(ipfs, room)
-		this.y.connector.onUserEvent(event => console.log("userEvent", event))
-		this.room = room
-
-		if (sync) {
+	async join(room) {
+		if (this.ipfs !== null) {
+			this.setState({ syncing: true, loading: false, room, path: "" })
+			if (this.y !== null) {
+				await this.y.destroy()
+			}
+			this.y = await createYjs(this.ipfs, room)
+			this.y.connector.onUserEvent(({ action, user }) =>
+				console.log(action, user)
+			)
 			this.y.connector.whenSynced(event => {
 				const document = spawn(this.y.share.value.get("document"))
 				const path = this.y.share.value.get("path")
 				if (path && path !== this.state.path) {
-					this.flags.reload = false
-					window.location.hash = path
+					window.history.replaceState({}, path, `#${path}`)
 				}
-				const selection = Range.create()
-				const value = this.state.value
-					.set("selection", selection)
-					.set("document", document)
-				this.setState({ value, syncing: false })
+				const value = Value.create({
+					document,
+					data: Map({ violations: List([]) }),
+				})
 				console.log("overwriting with synced document")
+				this.setState({ value, path, syncing: false })
 			})
-		} else {
-			const walker = walk(this.state.value.document, this.y)
-			set(this.y.share.value, "document", walker)
-
-			const { path } = this.state
-			this.y.share.value.set("path", path || "")
+			this.y.share.value.observeDeep(event => this.observe(event))
 		}
+	}
 
-		this.y.share.value.observeDeep(event => this.observe(event))
+	async save() {
+		if (this.ipfs !== null) {
+			const files = await save(this.ipfs, this.state.value)
+			const { hash } = files.find(({ path }) => path === key)
+			window.history.replaceState({}, hash, `#${hash}`)
+			this.setState({ path: hash })
+			if (this.y !== null) {
+				this.y.share.value.set("path", hash)
+			}
+		}
+	}
+
+	async share() {
+		if (this.ipfs !== null) {
+			if (this.y === null) {
+				const { path } = this.state
+				const room = niceware.generatePassphrase(6).join("-")
+				window.history.pushState({}, room, `?${room}#${path}`)
+				this.y = await createYjs(this.ipfs, room)
+				this.y.connector.onUserEvent(event => console.log("userEvent", event))
+				const walker = walk(this.state.value.document, this.y)
+				set(this.y.share.value, "document", walker)
+				this.y.share.value.set("path", path || "")
+				this.y.share.value.observeDeep(event => this.observe(event))
+				this.setState({ room }, () => window.alert(room))
+			} else {
+				window.alert(this.state.room)
+			}
+		}
 	}
 
 	onChange(change) {
 		const { syncing, loading } = this.state
 		if (syncing || loading) {
 			return
-		}
-		if (this.y === null) {
+		} else if (this.y === null) {
 			const { value } = change
 			this.setState({ value })
 		} else {
@@ -233,6 +199,12 @@ export default class extends Component {
 		}
 	}
 
+	onKeyDown(event, change) {
+		if (event.keyCode === 13) {
+			change.flags.enter = true
+		}
+	}
+
 	observe(event) {
 		if (this.state.syncing) {
 			// ignore remote observations while syncing
@@ -240,9 +212,8 @@ export default class extends Component {
 			// ignore local observations
 		} else if (event.object === y.share.value && event.name === "path") {
 			// update hash
-			const path = y.share.value.get("path")
-			this.flags.reload = false
-			window.location.hash = path
+			const path = event.value
+			window.history.replaceState({}, path, `#${path}`)
 		} else {
 			const value = applyObservation(event, this.state.value)
 			if (value !== this.state.value) {
@@ -251,11 +222,19 @@ export default class extends Component {
 		}
 	}
 	render() {
-		const { value, loading, syncing } = this.state
+		const { value, error, loading, syncing } = this.state
+		if (error) {
+			return (
+				<div>
+					<p>Nobody's perfect, and this app is especially so :-/</p>
+					<p>Try reloading?</p>
+				</div>
+			)
+		}
 		const readOnly = loading || syncing
-		const renderValue = loading
-			? values.loading
-			: syncing ? values.syncing : value
+		const renderValue = syncing
+			? values.syncing
+			: loading ? values.loading : value
 		return (
 			<Editor
 				plugins={plugins}
@@ -266,7 +245,8 @@ export default class extends Component {
 				value={renderValue}
 				placeholder={placeholder}
 				onChange={change => this.onChange(change)}
-				validateNode={node => validateNode(node, this.editor, this.root)}
+				onKeyDown={(event, change) => this.onKeyDown(event, change)}
+				validateNode={node => validateNode(node)}
 				decorateNode={decorateNode}
 				renderNode={renderNode}
 				renderMark={renderMark}
