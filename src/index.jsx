@@ -7,5 +7,8 @@ import createIpfs from "./ipfs"
 const header = document.querySelector("header")
 const main = document.querySelector("main")
 
-createIpfs().then(ipfs => ReactDOM.render(<Editor ipfs={ipfs} />, main))
+createIpfs().then(ipfs => {
+	window.ipfs = ipfs
+	ReactDOM.render(<Editor ipfs={ipfs} />, main)
+})
 // ReactDOM.render(<Editor ipfs={null} />, main)
