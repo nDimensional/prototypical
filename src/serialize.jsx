@@ -84,7 +84,8 @@ export async function load(ipfs, hash) {
 	const { name } = files.find(({ depth }) => depth === 0)
 	const { content } = files.find(({ path }) => path === `${name}/${index}`)
 	const text = decoder.decode(content)
-	return html.deserialize(text)
+	const value = html.deserialize(text)
+	return value.set("data", value.data.set("violations", List([])))
 }
 
 export const initial = text => ({
