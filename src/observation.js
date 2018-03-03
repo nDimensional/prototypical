@@ -61,7 +61,6 @@ export default function(event, value) {
 			.set("anchorOffset", anchorOffset)
 			.set("focusOffset", focusOffset)
 	} else if (isArray(object)) {
-		console.log("arrayEvent", event)
 		const { index, length, values } = event
 		const inserted = type === "insert" ? values.map(spawn) : []
 		const deleted = type === "insert" ? 0 : length
@@ -88,7 +87,6 @@ export default function(event, value) {
 					.filter(value => value.object === "block" && value.nodes.size === 0)
 					.map(value => {
 						const p = nodePath.concat([index + inserted.indexOf(value)])
-						console.log("mapping an inserted nodePath", nodePath, p)
 						return List(p)
 					})
 			)

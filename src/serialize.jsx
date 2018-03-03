@@ -95,7 +95,6 @@ export const initial = text => ({
 	},
 	document: {
 		object: "document",
-		key: "root",
 		data: {},
 		nodes: [
 			{

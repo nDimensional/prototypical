@@ -1,5 +1,3 @@
-// import yJS from "../yjs/yjs/src/Y.js"
-
 const yJS = require("yjs/dist/y.js")
 
 const yArray = require("y-array/dist/y-array")
@@ -7,10 +5,6 @@ const yText = require("y-text/dist/y-text")
 const yMap = require("y-map/dist/y-map")
 const yMemory = require("y-memory/dist/y-memory")
 const yIpfs = require("y-ipfs-connector")
-// const yIpfs = require("../yjs/y-ipfs-connector/src/index")
-
-// import yMemory from "../yjs/y-memory.js"
-// import yIpfs from "../yjs/y-ipfs-connector"
 
 import { tag } from "./utils"
 
@@ -119,6 +113,7 @@ function _set(key, value, trip) {
 	}
 }
 
+// Shim the default Y.Array.insert
 function _insert(pos, contents) {
 	if (typeof pos !== "number") {
 		throw new Error("pos must be a number!")

@@ -88,6 +88,11 @@ export default class extends Component {
 					// Save the hash
 					this.save()
 				}
+			} else if (keyCode === 27 && option) {
+				// escape & clear
+				history.replaceState({}, "prototypical", "/")
+				this.setState({ value: values.empty, path })
+				this.focus()
 			}
 		})
 
@@ -96,10 +101,13 @@ export default class extends Component {
 			const path = getPath()
 			if (path === "") {
 				this.setState({ value: values.empty, path })
+				this.focus()
 			} else {
 				this.open(path)
 			}
 		})
+
+		this.focus()
 	}
 
 	componentDidCatch(error, info) {
@@ -109,6 +117,12 @@ export default class extends Component {
 
 	shouldComponentUpdate(props, state) {
 		return state.value.data.get("violations").size === 0
+	}
+
+	focus() {
+		if (this.editor) {
+			this.editor.focus()
+		}
 	}
 
 	async open(path) {
