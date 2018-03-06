@@ -12,6 +12,7 @@ import {
 	imageType,
 	listItemType,
 	listItemTypes,
+	createParagraph,
 } from "./schema.js"
 
 export const index = "index.html"
@@ -88,27 +89,13 @@ export async function load(ipfs, hash) {
 	return value.set("data", value.data.set("violations", List([])))
 }
 
+// So you think you can read ES6, eh?
 export const initial = text => ({
 	object: "value",
-	data: {
-		violations: List([]),
-	},
+	data: { violations: List([]) },
 	document: {
 		object: "document",
-		data: {},
-		nodes: [
-			{
-				object: "block",
-				type: "p",
-				isVoid: false,
-				data: {},
-				nodes: [
-					{
-						object: "text",
-						leaves: [{ object: "leaf", text, marks: [] }],
-					},
-				],
-			},
-		],
+		data: { depth: 0, floor: 0 },
+		nodes: [createParagraph(text)],
 	},
 })

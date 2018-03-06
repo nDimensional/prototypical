@@ -35,7 +35,12 @@ const values = {
 export default class extends Component {
 	constructor(props) {
 		super(props)
-		const value = values.empty
+		const value = localStorage.hasOwnProperty("prototypical")
+			? Value.create({
+					data: { violations: [] },
+					document: JSON.parse(localStorage.getItem("prototypical")),
+			  })
+			: values.empty
 		const path = getPath()
 		const room = getRoom()
 		const loading = !!path
@@ -107,6 +112,15 @@ export default class extends Component {
 			}
 		})
 
+		window.addEventListener("beforeunload", event => {
+			if (!this.state.error) {
+				localStorage.setItem(
+					"prototypical",
+					JSON.stringify(this.state.value.document.toJS())
+				)
+			}
+		})
+
 		this.focus()
 	}
 
@@ -123,6 +137,10 @@ export default class extends Component {
 		if (this.editor) {
 			this.editor.focus()
 		}
+	}
+
+	async attach(data) {
+		setTimeout(() => console.log("attaching", data.toJS()), 1000)
 	}
 
 	async open(path) {
@@ -215,6 +233,9 @@ export default class extends Component {
 
 	onKeyDown(event, change) {
 		if (event.keyCode === 13) {
+			// This is the start of a hack to auto-insert
+			// list & quote prefixes on enter.
+			// This flag gets caught in validateNode.
 			change.flags.enter = true
 		}
 	}
@@ -260,7 +281,7 @@ export default class extends Component {
 				placeholder={placeholder}
 				onChange={change => this.onChange(change)}
 				onKeyDown={(event, change) => this.onKeyDown(event, change)}
-				validateNode={node => validateNode(node)}
+				validateNode={node => validateNode(node, this)}
 				decorateNode={decorateNode}
 				renderNode={renderNode}
 				renderMark={renderMark}
