@@ -87,9 +87,10 @@ export default {
 		[listItemType]: blockSchema,
 		[imageType]: blockSchema,
 		[documentType]: {
-			nodes: [{ types: headingTypes, min: 1 }, { types: blockTypes, min: 1 }],
+			nodes: [{ types: headingTypes, min: 1 }, { types: blockTypes, min: 0 }],
 			normalize(change, violation, context) {
 				if (violation === "child_required") {
+					console.log("WOAH THIS SHOULD NOT HAPPEN ANYMORE")
 					const { node, index } = context
 					const depth = node.data.get("depth")
 					change.insertNodeByKey(

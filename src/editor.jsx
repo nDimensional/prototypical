@@ -23,7 +23,7 @@ import { autoClose } from "./plugins"
 
 window.Value = Value
 
-const plugins = [autoClose(["[]", "()"])]
+const plugins = [autoClose(["[]", "()", "``", "**"])]
 const placeholder = "hello"
 
 const values = {

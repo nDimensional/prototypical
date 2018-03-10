@@ -35,11 +35,7 @@ function getBlockData(type, text, data) {
 	} else if (type === documentType) {
 		const [match, prefix, name, path] = documentTest.exec(text)
 		const depth = prefix.length
-		const map = { name, path, depth }
-		if (data && data.has("floor")) {
-			map.floor = data.get("floor")
-		}
-		return Map(map)
+		return Map({ name, path, depth })
 	} else if (headingTypes.includes(type)) {
 		return data || Map({})
 	} else {
@@ -67,21 +63,6 @@ function transitionToList(change, block, type) {
 	)
 }
 
-function walkDocuments(change, block, floor) {
-	const data = block.nodes.get(0).data.set("floor", floor)
-	change.setNodeByKey(block.nodes.get(0).key, { data })
-	block.nodes.forEach(child => {
-		if (child.type === documentType) {
-			const data = child.data.set("floor", floor)
-			change.setNodeByKey(child.key, { data })
-			walkDocuments(change, child, floor + data.get("depth"))
-		} else if (headingTypes.includes(child.type)) {
-			const data = child.data.set("floor", floor)
-			change.setNodeByKey(child.key, { data })
-		}
-	})
-}
-
 function validateBlock(block, editor) {
 	if (listTypes.includes(block.type)) {
 		return
@@ -101,18 +82,7 @@ function validateBlock(block, editor) {
 		// update document
 		const data = getBlockData(documentType, text, block.data)
 		if (!is(data, block.data)) {
-			return change => {
-				if (data.get("depth") !== block.data.get("depth")) {
-					const floor = data.get("depth") + data.get("floor")
-					change.withoutNormalization(change => {
-						change.setNodeByKey(block.key, { data })
-						change.setNodeByKey(block.nodes.get(0).key, { data })
-						walkDocuments(change, block, floor)
-					})
-				} else {
-					change.setNodeByKey(block.key, { data })
-				}
-			}
+			return change => change.setNodeByKey(block.key, { data })
 		}
 	} else if (
 		toDocument &&
@@ -129,25 +99,13 @@ function validateBlock(block, editor) {
 					next.type === documentType &&
 					!(next.nodes.size && next.nodes.get(0).data.get("header"))
 				if (headless) {
-					change.setNodeByKey(block.key, {
-						data: Map({ header: true, floor: next.data.get("floor") }),
-					})
+					change.setNodeByKey(block.key, { data: Map({ header: true }) })
 					change.moveNodeByKey(block.key, next.key, 0)
 				} else {
 					const parent = change.value.document.getParent(block.key)
-					const floor = parent.data.get("floor") + parent.data.get("depth")
-					const documentData = data.set("floor", floor)
-					change.setNodeByKey(block.key, {
-						data: Map({
-							header: true,
-							floor: floor + documentData.get("depth"),
-						}),
-					})
-					change.wrapBlockByKey(block.key, {
-						type: documentType,
-						data: documentData,
-					})
-					editor.attach(documentData)
+					change.setNodeByKey(block.key, { data: Map({ header: true }) })
+					change.wrapBlockByKey(block.key, { type: documentType, data })
+					editor.attach(data)
 				}
 			})
 	} else if (fromDocument) {
@@ -166,9 +124,8 @@ function validateBlock(block, editor) {
 				) {
 					change.moveNodeByKey(sibling.key, block.key, 0)
 				} else {
-					const floor = block.data.get("floor")
 					change.unwrapNodeByKey(headerKey)
-					change.setNodeByKey(headerKey, { data: Map({ floor }) })
+					change.setNodeByKey(headerKey, { data: Map({}) })
 					if (change.value.document.hasDescendant(block.key)) {
 						change.removeNodeByKey(block.key)
 					}
@@ -195,16 +152,18 @@ function validateBlock(block, editor) {
 						return change.moveNodeByKey(block.key, grandparent.key, index)
 					} else {
 						return change.withoutNormalization(change => {
-							const data = getBlockData(type, text)
+							const data = getBlockData(type, text, block.data)
 							const nextText = getBlockText(next)
 							const nextType = getBlockType(nextText)
-							const nextData = getBlockData(nextType, nextText)
-							return change
+							const nextData = getBlockData(nextType, nextText, next.data)
+							change
 								.moveNodeByKey(block.key, grandparent.key, index)
 								.moveNodeByKey(next.key, grandparent.key, index + 1)
 								.setNodeByKey(block.key, { type, data })
 								.setNodeByKey(next.key, { type: nextType, data: nextData })
-								.removeNodeByKey(parent.key)
+							if (change.value.document.hasDescendant(parent.key)) {
+								change.removeNodeByKey(parent.key)
+							}
 						})
 					}
 				}
@@ -231,21 +190,35 @@ function validateBlock(block, editor) {
 	} else {
 		// {p|h|img} --> {p|h|img}
 		const data = getBlockData(type, text, block.data)
-		return change => {
-			if (headingTypes.includes(type) && !headingTypes.includes(block.type)) {
-				const parent = change.value.document.getParent(block.key)
-				const floor = parent.data.get("floor") + parent.data.get("depth")
-				change.setNodeByKey(block.key, { type, data: data.set("floor", floor) })
-			} else {
-				change.setNodeByKey(block.key, { type, data })
-			}
-		}
+		return change => change.setNodeByKey(block.key, { type, data })
 	}
 }
 
 function validateDocument(document) {
 	const mergers = []
-	const last = document.nodes.reduce((array, block) => {
+	const childChanges = []
+	const last = document.nodes.reduce((array, block, index) => {
+		// Normal stuff
+		if (block.type === documentType) {
+			const changes = validateDocument(block)
+			if (changes) {
+				childChanges.push(changes)
+			}
+		} else if (
+			(document.object === "document" || index > 0) &&
+			headingTypes.includes(block.type) &&
+			block.data.get("header")
+		) {
+			const text = getBlockText(block)
+			if (documentTest.test(text)) {
+				const data = getBlockData(documentType, text)
+				childChanges.push(change =>
+					change.wrapBlockByKey(block.key, { type: documentType, data })
+				)
+			}
+		}
+
+		// List stuff
 		if (array === null) {
 			if (block.type === "blockquote") {
 				return [block.key]
@@ -283,7 +256,10 @@ function validateDocument(document) {
 					)
 				})
 			})
+			childChanges.forEach(changes => changes(change))
 		}
+	} else if (childChanges.length > 0) {
+		return change => childChanges.forEach(changes => changes(change))
 	}
 }
 

@@ -1,4 +1,9 @@
-// pairs are ["()", "[]", ...]
+const decorationMap = {
+	strong: "**",
+	em: "*",
+}
+
+// pairs are ["()", "[]", "``", ...]
 export const autoClose = pairs => ({
 	onKeyDown(event, change, editor) {
 		const { keyCode } = event
@@ -22,6 +27,21 @@ export const autoClose = pairs => ({
 
 		const open = pairs.find(([key]) => data === key)
 		if (open) {
+			if (open[0] === open[1] && change.value.selection.isCollapsed) {
+				const key = change.value.selection.focusKey
+				const offset = change.value.selection.focusOffset
+				const decorations = change.value.document
+					.getParent(key)
+					.getDecorations(editor.stack)
+					.filter(
+						decoration =>
+							decoration.focusKey === key &&
+							decoration.anchorKey === key &&
+							decoration.startOffset < offset &&
+							decoration.endOffset > offset
+					)
+			}
+
 			event.preventDefault()
 			change.insertText(open)
 			change.move(-1)

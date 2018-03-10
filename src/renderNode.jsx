@@ -11,6 +11,14 @@ import {
 	listItemTypes,
 } from "./schema.js"
 
+function renderDocument(contents) {
+	if (contents && contents.length > 0) {
+		return contents
+	} else {
+		return <p className="loading">I am loading stuff to do</p>
+	}
+}
+
 const renderers = {
 	[imageType]({ node: { data }, attributes, children }) {
 		return (
@@ -21,10 +29,11 @@ const renderers = {
 		)
 	},
 	[documentType]({ node: { data }, attributes, children }) {
-		const [header, ...document] = children
+		const [header, ...contents] = children
 		return (
 			<div className="transclusion" {...attributes}>
-				{children}
+				{header}
+				{renderDocument(contents)}
 			</div>
 		)
 	},
@@ -37,18 +46,27 @@ export default function renderNode(props) {
 	if (type === paragraphType) {
 		return React.createElement(type, attributes, children)
 	} else if (headingTypes.includes(type)) {
-		const floor = data.get("floor")
 		if (data.has("header") && data.get("header")) {
 			return React.createElement(
-				"h" + floor,
+				type,
 				{ ...attributes, className: "header" },
 				children
 			)
 		} else {
-			const depth = +type[1]
-			const heading = "h" + Math.min(depth + floor, maxHeader)
-			return React.createElement(heading, attributes, children)
+			return React.createElement(type, attributes, children)
 		}
+		// const floor = data.get("floor")
+		// if (data.has("header") && data.get("header")) {
+		// return React.createElement(
+		// 	"h" + floor,
+		// 	{ ...attributes, className: "header" },
+		// 	children
+		// )
+		// } else {
+		// 	const depth = +type[1]
+		// 	const heading = "h" + Math.min(depth + floor, maxHeader)
+		// 	return React.createElement(heading, attributes, children)
+		// }
 	} else if (listTypes.includes(type)) {
 		return React.createElement(type, attributes, children)
 	} else if (listItemTypes.includes(type)) {
